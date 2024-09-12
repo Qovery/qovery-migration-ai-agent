@@ -25,14 +25,22 @@ type Dockerfile struct {
 	DockerfileContent string
 }
 
-// GenerateMigrationAssets generates all necessary assets for migration
-func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, destination string) (*Assets, error) {
+// ProgressUpdate represents a progress update
+type ProgressUpdate struct {
+	Stage    string
+	Progress float64
+}
+
+// GenerateMigrationAssets generates all necessary assets for migration and reports progress
+func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	claudeClient := claude.NewClaudeClient(claudeAPIKey)
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
 
 	var configs []map[string]interface{}
 	var err error
 
+	// Fetch configs
+	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
 	switch source {
 	case "heroku":
 		herokuProvider := heroku.NewHerokuProvider(herokuAPIKey)
@@ -45,10 +53,13 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, d
 		return nil, fmt.Errorf("unsupported source: %s", source)
 	}
 
+	progressChan <- ProgressUpdate{Stage: "Processing configs", Progress: 0.3}
+
 	var qoveryConfigs = make(map[string]interface{})
 	var dockerfiles []Dockerfile
 
-	for _, app := range configs {
+	totalApps := len(configs)
+	for i, app := range configs {
 		appName := app["name"].(string)
 		qoveryConfig := qoveryProvider.TranslateConfig(app, destination)
 		qoveryConfigs[appName] = qoveryConfig
@@ -62,18 +73,29 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, d
 			AppName:           appName,
 			DockerfileContent: dockerfile,
 		})
+
+		progress := 0.3 + (float64(i+1) / float64(totalApps) * 0.4)
+		progressChan <- ProgressUpdate{Stage: fmt.Sprintf("Processing app %d/%d", i+1, totalApps), Progress: progress}
 	}
+
+	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
 
 	terraformMain, terraformVariables, err := generateTerraform(qoveryConfigs, destination, claudeClient)
 	if err != nil {
 		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
 	}
 
-	return &Assets{
+	progressChan <- ProgressUpdate{Stage: "Finalizing", Progress: 0.9}
+
+	assets := &Assets{
 		TerraformMain:      terraformMain,
 		TerraformVariables: terraformVariables,
 		Dockerfiles:        dockerfiles,
-	}, nil
+	}
+
+	progressChan <- ProgressUpdate{Stage: "Completed", Progress: 1.0}
+
+	return assets, nil
 }
 
 // generateDockerfile generates a Dockerfile for a given app configuration

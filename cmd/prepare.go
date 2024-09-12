@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/schollz/progressbar/v3"
+	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
 	"qovery-ai-migration/pkg/migration"
-
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -16,24 +16,24 @@ var (
 	stdoutFlag  bool
 )
 
-// migrateCmd represents the migrate command
-var migrateCmd = &cobra.Command{
-	Use:   "migrate",
-	Short: "Migrate applications to Qovery",
-	Long:  `This command migrates your applications to Qovery, generating necessary Terraform configurations and Dockerfiles.`,
-	Run:   runMigrate,
+// prepareCmd represents the prepare command
+var prepareCmd = &cobra.Command{
+	Use:   "prepare",
+	Short: "Prepare migration assets for Qovery",
+	Long:  `This command prepares migration assets for Qovery, generating necessary Terraform configurations and Dockerfiles.`,
+	Run:   runPrepare,
 }
 
 func init() {
-	rootCmd.AddCommand(migrateCmd)
-	migrateCmd.Flags().StringVarP(&source, "from", "f", "", "Source platform (e.g., 'heroku') (required)")
-	migrateCmd.Flags().StringVarP(&destination, "to", "t", "", "Destination cloud provider (aws, gcp, or scaleway) (required)")
-	migrateCmd.Flags().StringVarP(&outputDir, "output", "o", "", "Output directory for generated files")
-	_ = migrateCmd.MarkFlagRequired("from")
-	_ = migrateCmd.MarkFlagRequired("to")
+	rootCmd.AddCommand(prepareCmd)
+	prepareCmd.Flags().StringVarP(&source, "from", "f", "", "Source platform (e.g., 'heroku') (required)")
+	prepareCmd.Flags().StringVarP(&destination, "to", "t", "", "Destination cloud provider (aws, gcp, or scaleway) (required)")
+	prepareCmd.Flags().StringVarP(&outputDir, "output", "o", "", "Output directory for generated files")
+	_ = prepareCmd.MarkFlagRequired("from")
+	_ = prepareCmd.MarkFlagRequired("to")
 }
 
-func runMigrate(cmd *cobra.Command, args []string) {
+func runPrepare(cmd *cobra.Command, args []string) {
 	// Validate source
 	if source != "heroku" {
 		fmt.Println("Error: Currently only 'heroku' is supported as a source")
@@ -61,9 +61,40 @@ func runMigrate(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	assets, err := migration.GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, destination)
+	// Create a progress channel
+	progressChan := make(chan migration.ProgressUpdate)
+
+	// Create a new progress bar
+	bar := progressbar.NewOptions(100,
+		progressbar.OptionSetWidth(15),
+		progressbar.OptionSetDescription("Preparing..."),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "🚀",
+			SaucerHead:    "🚀",
+			SaucerPadding: "·",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	)
+
+	// Start a goroutine to update the progress bar
+	go func() {
+		for update := range progressChan {
+			_ = bar.Set(int(update.Progress * 100))
+			bar.Describe(update.Stage)
+		}
+	}()
+
+	assets, err := migration.GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, destination, progressChan)
+
+	// Close the progress channel
+	close(progressChan)
+
+	// Ensure the progress bar reaches 100%
+	_ = bar.Finish()
+
 	if err != nil {
-		fmt.Printf("Error generating migration assets: %v\n", err)
+		fmt.Printf("\nError generating migration assets: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -95,12 +126,12 @@ func runMigrate(cmd *cobra.Command, args []string) {
 			}
 		}
 
-		fmt.Printf("Migration assets generated successfully in %s\n", outputDir)
+		fmt.Printf("\nMigration assets prepared successfully in %s\n", outputDir)
 		return
 	}
 
 	// Output the generated assets to stdout
-	fmt.Println("Terraform Main Configuration:")
+	fmt.Println("\nTerraform Main Configuration:")
 	fmt.Println(assets.TerraformMain)
 	fmt.Println("\nTerraform Variables:")
 	fmt.Println(assets.TerraformVariables)
