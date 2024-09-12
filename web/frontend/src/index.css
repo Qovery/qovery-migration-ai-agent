@@ -1,0 +1,314 @@
+/* Qovery Migration Application Styles */
+
+:root {
+    --primary-bg: #1a1b2e;
+    --secondary-bg: #2a2b3e;
+    --accent-color: #7559FF;
+    --text-color: #ffffff;
+    --text-secondary: #a0a0b0;
+    --gradient-start: #151726;
+    --gradient-end: #1f2237;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    color: var(--text-color);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+}
+
+.App {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.container {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Header Styles */
+.site-header {
+    background-color: rgba(26, 27, 46, 0.8);
+    backdrop-filter: blur(5px);
+    padding: 20px 0;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.site-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--text-color);
+    margin: 0;
+}
+
+.site-nav {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.site-nav a {
+    color: var(--text-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+/* Button Styles */
+.btn {
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-primary {
+    background-color: var(--accent-color);
+    color: var(--text-color);
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--accent-color);
+}
+
+.btn:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+}
+
+/* Main Content Styles */
+.main-content {
+    flex-grow: 1;
+    padding-top: 40px;
+}
+
+/* Hero Section Styles */
+.hero {
+    text-align: center;
+    width: 100%;
+}
+
+.subtitle {
+    font-size: 24px;
+    color: #b8b8d9; /* Lighter color for better visibility */
+    margin-bottom: 40px;
+    text-align: center;
+    font-weight: 300; /* Light font weight for elegance */
+    letter-spacing: 0.5px; /* Slight letter spacing for readability */
+    line-height: 1.4;
+    max-width: 800px; /* Limit width for better readability on larger screens */
+    margin-left: auto;
+    margin-right: auto;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle text shadow for depth */
+}
+
+/* Add a subtle hover effect */
+.subtitle:hover {
+    color: #d1d1ff; /* Slightly lighter on hover */
+    transition: color 0.3s ease;
+}
+
+/* Migration Form Styles */
+.migration-form {
+    background-color: rgba(42, 43, 62, 0.8);
+    backdrop-filter: blur(10px);
+    padding: 30px;
+    border-radius: 10px;
+    max-width: 600px;
+    margin: 0 auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.section-title {
+    color: var(--accent-color);
+    font-size: 1.2em;
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-secondary);
+}
+
+.input-field {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: rgba(26, 27, 46, 0.6);
+    color: var(--text-color);
+    border: 1px solid var(--accent-color);
+}
+
+/* Select Input Styles */
+.select-input {
+    width: 100%;
+    padding: 10px 30px 10px 10px;
+    border-radius: 5px;
+    background-color: rgba(26, 27, 46, 0.6);
+    color: var(--text-color);
+    border: 1px solid var(--accent-color);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237559FF' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+
+.select-input option {
+    background-color: var(--secondary-bg);
+    color: var(--text-color);
+    padding: 10px;
+}
+
+/* Styling for the selected option */
+.select-input option:checked {
+    background: linear-gradient(0deg, var(--accent-color) 0%, var(--accent-color) 100%);
+    color: var(--text-color);
+}
+
+/* Position the icon */
+.select-input option {
+    display: flex;
+    align-items: center;
+    padding: 5px 5px 5px 30px;
+    position: relative;
+}
+
+.select-input option::before {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    position: absolute;
+    left: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+textarea.input-field {
+    resize: vertical;
+}
+
+.button-group {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 30px;
+}
+
+.button-group .btn {
+    flex: 1;
+    margin: 0 10px;
+}
+
+.button-group .btn:first-child {
+    margin-left: 0;
+}
+
+.button-group .btn:last-child {
+    margin-right: 0;
+}
+
+.security-note {
+    background-color: rgba(117, 89, 255, 0.1);
+    border-left: 4px solid var(--accent-color);
+    padding: 10px;
+    margin-top: 20px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+/* Review Page Styles */
+.code-preview {
+    background-color: rgba(26, 27, 46, 0.6);
+    border: 1px solid var(--accent-color);
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 15px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--text-secondary);
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.site-footer {
+    background-color: rgba(26, 27, 46, 0.8);
+    backdrop-filter: blur(5px);
+    padding: 20px 0;
+    margin-top: auto;
+}
+
+.open-source-info {
+    color: var(--text-secondary);
+    text-align: center;
+    font-size: 14px;
+}
+
+.github-link {
+    color: var(--accent-color);
+    text-decoration: none;
+    margin-left: 5px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.github-link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .subtitle {
+        font-size: 20px; /* Slightly smaller on mobile devices */
+    }
+
+    .site-nav {
+        margin-top: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .migration-form {
+        padding: 20px;
+    }
+
+    .button-group {
+        flex-direction: column;
+    }
+
+    .button-group .btn {
+        width: 100%;
+        margin: 10px 0;
+    }
+}
