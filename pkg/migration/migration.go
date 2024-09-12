@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/go-github/v39/github"
+	"io/ioutil"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"qovery-ai-migration/pkg/claude"
 	"qovery-ai-migration/pkg/heroku"
@@ -154,6 +157,7 @@ Provide two separate configurations:
 1. A main.tf file containing the full Terraform configuration for all apps.
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
 Format the response as a tuple of two strings: (main_tf_content, variables_tf_content).
+Don't format the output by using backticks.
 Do not include anything else.`,
 		string(configJSON), destination, string(examplesJSON), destination)
 
@@ -162,7 +166,19 @@ Do not include anything else.`,
 		return "", "", fmt.Errorf("error generating Terraform configs: %w", err)
 	}
 
-	return parseTerraformResponse(response)
+	mainTf, variablesTf, err := parseTerraformResponse(response)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	// Validate the Terraform configuration
+	finalMainTf, err := validateTerraform(mainTf, variablesTf, claudeClient)
+	if err != nil {
+		return "", "", fmt.Errorf("error validating Terraform configuration: %w", err)
+	}
+
+	return finalMainTf, variablesTf, nil
 }
 
 func loadTerraformExamples(owner string, repo string, exampleDir string) ([]TerraformExample, error) {
@@ -220,4 +236,87 @@ func parseTerraformResponse(response string) (string, string, error) {
 	parts[1] = strings.Trim(parts[1], "\"")
 
 	return parts[0], parts[1], nil
+}
+
+// ValidateTerraform takes an original Terraform manifest, validates it, and returns the final valid manifest or an error
+func validateTerraform(originalMainManifest string, originalVariablesManifest string, claudeClient *claude.ClaudeClient) (string, error) {
+	// Create a temporary directory for Terraform files
+	tempDir, err := ioutil.TempDir("", "terraform-validate")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Write the original manifest to a file in the temp directory
+	tfFilePath := filepath.Join(tempDir, "main.tf")
+	if err := ioutil.WriteFile(tfFilePath, []byte(originalMainManifest), 0644); err != nil {
+		return "", fmt.Errorf("failed to write Terraform file: %w", err)
+	}
+
+	tfVarFilePath := filepath.Join(tempDir, "variables.tf")
+	if err := ioutil.WriteFile(tfVarFilePath, []byte(originalVariablesManifest), 0644); err != nil {
+		return "", fmt.Errorf("failed to write Terraform file: %w", err)
+	}
+
+	maxIterations := 10
+	for i := 0; i < maxIterations; i++ {
+		fmt.Printf("Iteration %d:\n", i+1)
+
+		// Run terraform init
+		initCmd := exec.Command("terraform", "init")
+		initCmd.Dir = tempDir
+		initOutput, err := initCmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Terraform init failed: %s\n", initOutput)
+			return "", fmt.Errorf("terraform init failed: %w", err)
+		}
+
+		// Run terraform validate
+		validateCmd := exec.Command("terraform", "validate", "-json")
+		validateCmd.Dir = tempDir
+
+		output, err := validateCmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Terraform validation failed: %s\n", output)
+
+			// Read the current Terraform file
+			tfContent, err := ioutil.ReadFile(tfFilePath)
+			if err != nil {
+				return "", fmt.Errorf("error reading Terraform file: %w", err)
+			}
+
+			// Prepare the prompt for Claude
+			prompt := fmt.Sprintf(`The following Terraform configuration has validation errors:
+
+%s
+
+The validation error is:
+%s
+
+Please fix the Terraform configuration to resolve these errors. Provide only the corrected Terraform code without any explanations.`, tfContent, output)
+
+			// Get Claude's response
+			correctedTF, err := claudeClient.Messages(prompt)
+			if err != nil {
+				return "", fmt.Errorf("error getting response from Claude: %w", err)
+			}
+
+			// Write the corrected Terraform to file
+			err = ioutil.WriteFile(tfFilePath, []byte(correctedTF), 0644)
+			if err != nil {
+				return "", fmt.Errorf("error writing corrected Terraform: %w", err)
+			}
+
+			fmt.Println("Applied corrections from Claude. Retrying validation...")
+		} else {
+			// Read and return the final valid Terraform manifest
+			finalManifest, err := ioutil.ReadFile(tfFilePath)
+			if err != nil {
+				return "", fmt.Errorf("error reading final Terraform manifest: %w", err)
+			}
+			return string(finalManifest), nil
+		}
+	}
+
+	return "", fmt.Errorf("exceeded maximum iterations (%d) without achieving a valid Terraform configuration", maxIterations)
 }
