@@ -94,29 +94,29 @@ Instructions:
 	return claudeClient.Messages(prompt)
 }
 
-// generateTerraform generates Terraform configurations for Qovery
-
-const (
-	owner      = "Qovery"
-	repo       = "terraform-examples"
-	exampleDir = "examples"
-)
-
 type TerraformExample struct {
 	Name    string
 	Content string
 }
 
+// generateTerraform generates Terraform configurations for Qovery
 func generateTerraform(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient) (string, string, error) {
 	configJSON, err := json.Marshal(qoveryConfigs)
 	if err != nil {
 		return "", "", fmt.Errorf("error marshaling Qovery configs: %w", err)
 	}
 
-	examples, err := loadTerraformExamples()
+	officialExamples, err := loadTerraformExamples("Qovery", "terraform-examples", "examples")
 	if err != nil {
 		return "", "", fmt.Errorf("error loading Terraform examples: %w", err)
 	}
+
+	airbyteExample, err := loadTerraformExamples("evoxmusic", "qovery-airbyte", ".")
+	if err != nil {
+		return "", "", fmt.Errorf("error loading Terraform examples: %w", err)
+	}
+
+	examples := append(officialExamples, airbyteExample...)
 
 	examplesJSON, err := json.Marshal(examples)
 	if err != nil {
@@ -143,7 +143,7 @@ Do not include anything else.`,
 	return parseTerraformResponse(response)
 }
 
-func loadTerraformExamples() ([]TerraformExample, error) {
+func loadTerraformExamples(owner string, repo string, exampleDir string) ([]TerraformExample, error) {
 	client := github.NewClient(nil)
 
 	_, dirContent, _, err := client.Repositories.GetContents(context.Background(), owner, repo, exampleDir, nil)
@@ -189,5 +189,13 @@ func parseTerraformResponse(response string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid response format")
 	}
 
-	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), nil
+	// trim leading and trailing whitespace
+	parts[0] = strings.TrimSpace(parts[0])
+	parts[1] = strings.TrimSpace(parts[1])
+
+	// Remove the leading and trailing quotes
+	parts[0] = strings.Trim(parts[0], "\"")
+	parts[1] = strings.Trim(parts[1], "\"")
+
+	return parts[0], parts[1], nil
 }
