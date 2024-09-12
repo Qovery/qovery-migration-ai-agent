@@ -77,23 +77,28 @@ graph TD
     G --> H[Claude AI generates Qovery Terraform files]
     H --> I[CLI receives Terraform files]
     I --> J[CLI reintegrates sensitive data]
-    J --> K[CLI generates output for user review]
-    K --> L[User reviews and uses output]
-    L --> M[End]
+    J --> K[Validate Terraform manifest]
+    K --> L{Is manifest valid?}
+    L -->|Yes| M[CLI generates output for user review]
+    L -->|No| N[Auto-remediation process]
+    N --> O[Claude AI fixes Terraform errors]
+    O --> K
+    M --> P[User reviews and uses output]
+    P --> Q[End]
 
     subgraph "Data Sources"
-        N[Heroku API]
-        O[GitHub Examples]
+        R[Heroku API]
+        S[GitHub Examples]
     end
 
     subgraph "Security Measure"
-        P[Sensitive data kept locally]
+        T[Sensitive data kept locally]
     end
 
-    B -.-> N
-    H -.-> O
-    C -.-> P
-    J -.-> P
+    B -.-> R
+    H -.-> S
+    C -.-> T
+    J -.-> T
 ```
 
 

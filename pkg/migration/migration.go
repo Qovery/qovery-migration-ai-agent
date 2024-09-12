@@ -39,7 +39,7 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, d
 	claudeClient := claude.NewClaudeClient(claudeAPIKey)
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
 
-	var configs []map[string]interface{}
+	var configs []heroku.AppConfig
 	var err error
 
 	// Fetch configs
@@ -63,11 +63,11 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, d
 
 	totalApps := len(configs)
 	for i, app := range configs {
-		appName := app["name"].(string)
-		qoveryConfig := qoveryProvider.TranslateConfig(app, destination)
+		appName := app.App["name"].(string)
+		qoveryConfig := qoveryProvider.TranslateConfig(app.App, destination)
 		qoveryConfigs[appName] = qoveryConfig
 
-		dockerfile, err := generateDockerfile(app, claudeClient)
+		dockerfile, err := generateDockerfile(app.App, claudeClient)
 		if err != nil {
 			return nil, fmt.Errorf("error generating Dockerfile for %s: %w", appName, err)
 		}
@@ -157,6 +157,7 @@ Provide two separate configurations:
 1. A main.tf file containing the full Terraform configuration for all apps.
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
 Format the response as a tuple of two strings: (main_tf_content, variables_tf_content).
+Don't use Buildpacks, only use Dockerfiles for build_mode.
 Don't format the output by using backticks.
 Do not include anything else.`,
 		string(configJSON), destination, string(examplesJSON), destination)
