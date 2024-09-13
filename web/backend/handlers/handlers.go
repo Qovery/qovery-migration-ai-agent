@@ -1,12 +1,24 @@
 package handlers
 
 import (
+	"archive/zip"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/migration"
 	"github.com/gin-gonic/gin"
-	qovery_migration_library "github.com/qovery/qovery-ai-migration/pkg/migration"
 )
+
+type Config struct {
+	HerokuAPIKey   string
+	ClaudeAPIKey   string
+	QoveryAPIKey   string
+	AllowedOrigins []string
+}
 
 type MigrationRequest struct {
 	Source      string            `json:"source"`
@@ -14,47 +26,120 @@ type MigrationRequest struct {
 	Credentials map[string]string `json:"credentials"`
 }
 
-func MigrateHandler(c *gin.Context) {
-	var req MigrationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+func MigrateHandlerWithConfig(config Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req MigrationRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
-	// Use your Go library to generate Terraform manifests and Dockerfiles
-	terraformManifest, dockerfile, err := qovery_migration_library.GenerateMigrationFiles(req.Source, req.Destination, req.Credentials)
+		// Create a temporary directory
+		tempDir, err := ioutil.TempDir("", "migration-")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create temporary directory"})
+			return
+		}
+		defer os.RemoveAll(tempDir) // Clean up the temporary directory when we're done
+
+		progressChan := make(chan migration.ProgressUpdate)
+		go func() {
+			for update := range progressChan {
+				// You can use this to send real-time updates to the client
+				// For example, you could use WebSockets or Server-Sent Events
+				_ = update // Placeholder to avoid unused variable error
+			}
+		}()
+
+		// Use your Go library to generate Terraform manifests and Dockerfiles
+		assets, err := migration.GenerateMigrationAssets(req.Source, config.HerokuAPIKey,
+			config.ClaudeAPIKey, config.QoveryAPIKey, req.Destination, progressChan)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate migration files"})
+			return
+		}
+
+		// Write the generated assets to the temporary directory
+		err = migration.WriteAssets(tempDir, assets)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write migration files"})
+			return
+		}
+
+		// Create a zip file
+		zipPath := filepath.Join(tempDir, "migration.zip")
+		err = createZip(tempDir, zipPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create zip file"})
+			return
+		}
+
+		// Set the appropriate headers for file download
+		c.Header("Content-Description", "File Transfer")
+		c.Header("Content-Transfer-Encoding", "binary")
+		c.Header("Content-Disposition", "attachment; filename=migration.zip")
+		c.Header("Content-Type", "application/zip")
+
+		// Send the file
+		c.File(zipPath)
+	}
+}
+
+func createZip(sourceDir, zipPath string) error {
+	zipFile, err := os.Create(zipPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate migration files"})
-		return
+		return fmt.Errorf("failed to create zip file: %v", err)
 	}
+	defer zipFile.Close()
 
-	// Save generated files (in a real-world scenario, consider using a more secure method)
-	// This is a simplified example and may not be suitable for production use
-	if err := saveFile("terraform.tf", terraformManifest); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Terraform manifest"})
-		return
-	}
-	if err := saveFile("Dockerfile", dockerfile); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Dockerfile"})
-		return
-	}
+	archive := zip.NewWriter(zipFile)
+	defer archive.Close()
 
-	c.JSON(http.StatusOK, gin.H{"message": "Migration files generated successfully"})
-}
+	err = filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 
-func DownloadHandler(c *gin.Context) {
-	filename := c.Param("filename")
-	if filename != "terraform.tf" && filename != "Dockerfile" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid filename"})
-		return
-	}
+		// Skip the zip file itself
+		if path == zipPath {
+			return nil
+		}
 
-	filepath := filepath.Join(".", filename)
-	c.File(filepath)
-}
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return fmt.Errorf("failed to create file header: %v", err)
+		}
 
-func saveFile(filename string, content string) error {
-	// Implement file saving logic
-	// This is a placeholder and should be replaced with actual file writing code
-	return nil
+		header.Name, err = filepath.Rel(sourceDir, path)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path: %v", err)
+		}
+
+		if info.IsDir() {
+			header.Name += "/"
+		} else {
+			header.Method = zip.Deflate
+		}
+
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			return fmt.Errorf("failed to create header: %v", err)
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("failed to open file: %v", err)
+		}
+		defer file.Close()
+
+		_, err = io.Copy(writer, file)
+		return err
+	})
+
+	return err
 }

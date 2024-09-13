@@ -97,7 +97,11 @@ func runPrepare(cmd *cobra.Command, args []string) {
 	}
 
 	if outputDir != "" {
-		migration.WriteAssets(outputDir, assets)
+		err := migration.WriteAssets(outputDir, assets)
+		if err != nil {
+			fmt.Printf("\nError writing migration assets: %v\n", err)
+			return
+		}
 		fmt.Printf("\nMigration assets prepared successfully in %s\n", outputDir)
 		return
 	}
