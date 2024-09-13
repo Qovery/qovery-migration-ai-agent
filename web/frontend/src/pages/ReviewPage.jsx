@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import '../index.css';
+import QoveryLoader from "../components/QoveryLoader";
 
 function ReviewPage({migrationData}) {
     const [isLoading, setIsLoading] = useState(true);
@@ -16,14 +17,17 @@ function ReviewPage({migrationData}) {
             setIsLoading(true);
             setError(null);
             try {
-                const provider = migrationData.source.toLowerCase(); // Assuming source indicates the provider (e.g., 'heroku')
+                const provider = migrationData.source.toLowerCase();
                 const response = await fetch(`${API_HOST_URL}/api/migrate/${provider}`, {
                     method: 'POST', headers: {
                         'Content-Type': 'application/json',
                     }, body: JSON.stringify(migrationData),
                 });
 
-                if (!response.ok) throw new Error('Failed to generate migration files');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate migration files');
+                }
 
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
@@ -38,7 +42,7 @@ function ReviewPage({migrationData}) {
                 setIsLoading(false);
             } catch (error) {
                 console.error('Error generating files:', error);
-                setError('Failed to generate migration files. Please try again.');
+                setError(error.message || 'Failed to generate migration files. Please try again.');
                 setIsLoading(false);
             }
         };
@@ -49,7 +53,7 @@ function ReviewPage({migrationData}) {
         return (<div className="container">
                 <div className="migration-form">
                     <p className="subtitle">Generating migration files...</p>
-                    {/* You can add a loading spinner here */}
+                    <QoveryLoader/>
                 </div>
             </div>);
     }
@@ -57,7 +61,8 @@ function ReviewPage({migrationData}) {
     if (error) {
         return (<div className="container">
                 <div className="migration-form">
-                    <p className="subtitle">{error}</p>
+                    <p className="subtitle">Error:</p>
+                    <p className="error-message">{error}</p>
                     <button onClick={() => navigate('/')} className="btn btn-primary">
                         Start Over
                     </button>

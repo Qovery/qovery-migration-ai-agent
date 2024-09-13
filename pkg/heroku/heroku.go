@@ -115,6 +115,10 @@ func (h *HerokuProvider) makeRequestConfig(url string) (map[string]string, error
 	req.Header.Add("Accept", "application/vnd.heroku+json; version=3")
 
 	resp, err := h.Client.Do(req)
+	if err != nil && resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("error sending request: unauthorized")
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("error sending request: %w", err)
 	}

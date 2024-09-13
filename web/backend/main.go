@@ -12,7 +12,6 @@ import (
 func main() {
 	config := handlers.Config{
 		ClaudeAPIKey:   os.Getenv("CLAUDE_API_KEY"),
-		QoveryAPIKey:   os.Getenv("QOVERY_API_KEY"),
 		AllowedOrigins: []string{"http://localhost:3000", "https://migrate.qovery.com"},
 	}
 

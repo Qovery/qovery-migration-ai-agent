@@ -58,14 +58,14 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 		// Use your Go library to generate Terraform manifests and Dockerfiles
 		assets, err := migration.GenerateMigrationAssets(req.Source, req.HerokuAPIKey, config.ClaudeAPIKey, config.QoveryAPIKey, req.Destination, progressChan)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate migration files"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
 		// Write the generated assets to the temporary directory
 		err = migration.WriteAssets(tempDir, assets)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write migration files"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 

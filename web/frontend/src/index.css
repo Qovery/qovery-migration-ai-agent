@@ -106,21 +106,25 @@ body {
 
 .subtitle {
     font-size: 24px;
-    color: #b8b8d9; /* Lighter color for better visibility */
+    color: #b8b8d9;
     margin-bottom: 40px;
     text-align: center;
-    font-weight: 300; /* Light font weight for elegance */
-    letter-spacing: 0.5px; /* Slight letter spacing for readability */
+    font-weight: 300;
+    letter-spacing: 0.5px;
     line-height: 1.4;
-    max-width: 800px; /* Limit width for better readability on larger screens */
+    max-width: 800px;
     margin-left: auto;
     margin-right: auto;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle text shadow for depth */
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Add a subtle hover effect */
+.subtitle.left-aligned {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
 .subtitle:hover {
-    color: #d1d1ff; /* Slightly lighter on hover */
+    color: #d1d1ff;
     transition: color 0.3s ease;
 }
 
@@ -182,29 +186,9 @@ body {
     padding: 10px;
 }
 
-/* Styling for the selected option */
 .select-input option:checked {
     background: linear-gradient(0deg, var(--accent-color) 0%, var(--accent-color) 100%);
     color: var(--text-color);
-}
-
-/* Position the icon */
-.select-input option {
-    display: flex;
-    align-items: center;
-    padding: 5px 5px 5px 30px;
-    position: relative;
-}
-
-.select-input option::before {
-    content: '';
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    position: absolute;
-    left: 5px;
-    top: 50%;
-    transform: translateY(-50%);
 }
 
 textarea.input-field {
@@ -256,6 +240,66 @@ textarea.input-field {
     line-height: 1.4;
 }
 
+/* Next Steps Page Styles */
+.next-steps-list {
+    list-style-type: none;
+    counter-reset: step-counter;
+    padding-left: 0;
+}
+
+.next-steps-list li {
+    position: relative;
+    padding-left: 50px;
+    margin-bottom: 20px;
+    counter-increment: step-counter;
+    text-align: left;
+}
+
+.next-steps-list li::before {
+    content: counter(step-counter);
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    background-color: var(--accent-color);
+    color: var(--text-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.next-steps-list code {
+    background-color: rgba(117, 89, 255, 0.2);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+.additional-info {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--accent-color);
+    font-style: italic;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.inline-link {
+    color: var(--accent-color);
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.inline-link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Footer Styles */
 .site-footer {
     background-color: rgba(26, 27, 46, 0.8);
     backdrop-filter: blur(5px);
@@ -290,7 +334,7 @@ textarea.input-field {
     }
 
     .subtitle {
-        font-size: 20px; /* Slightly smaller on mobile devices */
+        font-size: 20px;
     }
 
     .site-nav {
@@ -310,5 +354,9 @@ textarea.input-field {
     .button-group .btn {
         width: 100%;
         margin: 10px 0;
+    }
+
+    .next-steps-list li {
+        padding-left: 40px;
     }
 }
