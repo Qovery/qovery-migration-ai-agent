@@ -1,4 +1,4 @@
-module qovery-ai-migration
+module github.com/Qovery/qovery-migration-ai-agent
 
 go 1.22.5
 

@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/qovery/qovery-migration-ai-agent"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
-	"qovery-ai-migration/pkg/migration"
 )
 
 var (
@@ -62,7 +62,7 @@ func runPrepare(cmd *cobra.Command, args []string) {
 	}
 
 	// Create a progress channel
-	progressChan := make(chan migration.ProgressUpdate)
+	progressChan := make(chan qovery_migration_ai_agent.migration.ProgressUpdate)
 
 	// Create a new progress bar
 	bar := progressbar.NewOptions(100,
