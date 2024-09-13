@@ -15,8 +15,7 @@ func main() {
 		AllowedOrigins: []string{
 			"http://localhost:3000",
 			"https://migrate.qovery.com",
-			os.Getenv("REACT_APP_API_HOST_URL"),
-			os.Getenv("API_HOST_URL"),
+			os.Getenv("FRONTEND_HOST_URL"),
 		},
 	}
 
