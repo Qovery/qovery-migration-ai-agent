@@ -321,3 +321,35 @@ Please fix the Terraform configuration to resolve these errors. Provide only the
 
 	return "", fmt.Errorf("exceeded maximum iterations (%d) without achieving a valid Terraform configuration", maxIterations)
 }
+
+// WriteAssets writes the generated assets to the output directory
+func WriteAssets(outputDir string, assets *Assets) error {
+	// Create the output directory if it doesn't exist
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("error creating output directory: %w", err)
+	}
+
+	// Write Terraform main configuration
+	if err := writeToFile(filepath.Join(outputDir, "main.tf"), assets.TerraformMain); err != nil {
+		return fmt.Errorf("error writing main.tf: %w", err)
+	}
+
+	// Write Terraform variables
+	if err := writeToFile(filepath.Join(outputDir, "variables.tf"), assets.TerraformVariables); err != nil {
+		return fmt.Errorf("error writing variables.tf: %w", err)
+	}
+
+	// Write Dockerfiles
+	for _, dockerfile := range assets.Dockerfiles {
+		filename := fmt.Sprintf("Dockerfile-%s", dockerfile.AppName)
+		if err := writeToFile(filepath.Join(outputDir, filename), dockerfile.DockerfileContent); err != nil {
+			return fmt.Errorf("error writing %s: %w", filename, err)
+		}
+	}
+
+	return nil
+}
+
+func writeToFile(filename, content string) error {
+	return os.WriteFile(filename, []byte(content), 0644)
+}

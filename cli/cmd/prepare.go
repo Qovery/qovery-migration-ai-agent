@@ -2,18 +2,16 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/qovery/qovery-migration-ai-agent"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/migration"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"os"
-	"path/filepath"
 )
 
 var (
 	source      string
 	destination string
 	outputDir   string
-	stdoutFlag  bool
 )
 
 // prepareCmd represents the prepare command
@@ -62,7 +60,7 @@ func runPrepare(cmd *cobra.Command, args []string) {
 	}
 
 	// Create a progress channel
-	progressChan := make(chan qovery_migration_ai_agent.migration.ProgressUpdate)
+	progressChan := make(chan migration.ProgressUpdate)
 
 	// Create a new progress bar
 	bar := progressbar.NewOptions(100,
@@ -99,33 +97,7 @@ func runPrepare(cmd *cobra.Command, args []string) {
 	}
 
 	if outputDir != "" {
-		// Create the output directory if it doesn't exist
-		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			fmt.Printf("Error creating output directory: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Write Terraform main configuration
-		if err := writeToFile(filepath.Join(outputDir, "main.tf"), assets.TerraformMain); err != nil {
-			fmt.Printf("Error writing main.tf: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Write Terraform variables
-		if err := writeToFile(filepath.Join(outputDir, "variables.tf"), assets.TerraformVariables); err != nil {
-			fmt.Printf("Error writing variables.tf: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Write Dockerfiles
-		for _, dockerfile := range assets.Dockerfiles {
-			filename := fmt.Sprintf("Dockerfile-%s", dockerfile.AppName)
-			if err := writeToFile(filepath.Join(outputDir, filename), dockerfile.DockerfileContent); err != nil {
-				fmt.Printf("Error writing %s: %v\n", filename, err)
-				os.Exit(1)
-			}
-		}
-
+		migration.WriteAssets(outputDir, assets)
 		fmt.Printf("\nMigration assets prepared successfully in %s\n", outputDir)
 		return
 	}
@@ -141,8 +113,4 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		fmt.Println(dockerfile.DockerfileContent)
 		fmt.Println("---")
 	}
-}
-
-func writeToFile(filename, content string) error {
-	return os.WriteFile(filename, []byte(content), 0644)
 }
