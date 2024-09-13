@@ -21,6 +21,45 @@ The project is structured as follows:
 - [CLI](cli): Contains the command-line interface for the migration agent (can be used on your local machine)
 - [Web](web): Contains the web interface for the migration agent (can be deployed on a server)
 
+## How it works
+
+The migration agent uses the Heroku (or other provider) API to fetch information about the application to be migrated. It then generates Terraform configurations for deploying the application on Qovery. The generated Terraform configurations include the necessary resources such as the application, environment, database, and other services.
+
+```mermaid
+graph TD
+    A[Start] --> B[CLI fetches app data from Heroku API]
+    B --> C[CLI filters out sensitive data]
+    C --> D[CLI sends non-sensitive app data to Claude AI API]
+    D --> E[Claude AI generates Dockerfiles]
+    E --> F[CLI receives Dockerfiles]
+    F --> G[CLI sends non-sensitive app data to Claude AI API]
+    G --> H[Claude AI generates Qovery Terraform files]
+    H --> I[CLI receives Terraform files]
+    I --> J[CLI reintegrates sensitive data]
+    J --> K[Validate Terraform manifest]
+    K --> L{Is manifest valid?}
+    L -->|Yes| M[CLI generates output for user review]
+    L -->|No| N[Auto-remediation process]
+    N --> O[Claude AI fixes Terraform errors]
+    O --> K
+    M --> P[User reviews and uses output]
+    P --> Q[End]
+
+    subgraph "Data Sources"
+        R[Heroku API]
+        S[GitHub Examples]
+    end
+
+    subgraph "Security Measure"
+        T[Sensitive data kept locally]
+    end
+
+    B -.-> R
+    H -.-> S
+    C -.-> T
+    J -.-> T
+```
+
 ## Security
 
 - This application does not store any user credentials.

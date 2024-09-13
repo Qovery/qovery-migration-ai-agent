@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
-	qovery_migration_library "github.com/qovery/qovery-ai-migration/cli/pkg/migration"
+	qovery_migration_library "github.com/qovery/qovery-ai-migration/pkg/migration"
 )
 
 type MigrationRequest struct {
