@@ -14,28 +14,33 @@ import (
 )
 
 type Config struct {
-	HerokuAPIKey   string
 	ClaudeAPIKey   string
 	QoveryAPIKey   string
 	AllowedOrigins []string
 }
 
-type MigrationRequest struct {
-	Source      string            `json:"source"`
-	Destination string            `json:"destination"`
-	Credentials map[string]string `json:"credentials"`
+type HerokuMigrationRequest struct {
+	Source       string            `json:"source"`
+	Destination  string            `json:"destination"`
+	HerokuAPIKey string            `json:"herokuApiKey"`
+	Credentials  map[string]string `json:"credentials"`
 }
 
-func MigrateHandlerWithConfig(config Config) gin.HandlerFunc {
+func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req MigrationRequest
+		var req HerokuMigrationRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
+		if req.HerokuAPIKey == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Heroku API Key is required"})
+			return
+		}
+
 		// Create a temporary directory
-		tempDir, err := ioutil.TempDir("", "migration-")
+		tempDir, err := ioutil.TempDir("", "heroku-migration-")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create temporary directory"})
 			return
@@ -52,9 +57,7 @@ func MigrateHandlerWithConfig(config Config) gin.HandlerFunc {
 		}()
 
 		// Use your Go library to generate Terraform manifests and Dockerfiles
-		assets, err := migration.GenerateMigrationAssets(req.Source, config.HerokuAPIKey,
-			config.ClaudeAPIKey, config.QoveryAPIKey, req.Destination, progressChan)
-
+		assets, err := migration.GenerateMigrationAssets(req.Source, req.HerokuAPIKey, config.ClaudeAPIKey, config.QoveryAPIKey, req.Destination, progressChan)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate migration files"})
 			return
@@ -68,7 +71,7 @@ func MigrateHandlerWithConfig(config Config) gin.HandlerFunc {
 		}
 
 		// Create a zip file
-		zipPath := filepath.Join(tempDir, "migration.zip")
+		zipPath := filepath.Join(tempDir, "heroku-migration.zip")
 		err = createZip(tempDir, zipPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create zip file"})
@@ -78,7 +81,7 @@ func MigrateHandlerWithConfig(config Config) gin.HandlerFunc {
 		// Set the appropriate headers for file download
 		c.Header("Content-Description", "File Transfer")
 		c.Header("Content-Transfer-Encoding", "binary")
-		c.Header("Content-Disposition", "attachment; filename=migration.zip")
+		c.Header("Content-Disposition", "attachment; filename=heroku-migration.zip")
 		c.Header("Content-Type", "application/zip")
 
 		// Send the file

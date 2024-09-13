@@ -11,7 +11,6 @@ import (
 
 func main() {
 	config := handlers.Config{
-		HerokuAPIKey:   os.Getenv("HEROKU_API_KEY"),
 		ClaudeAPIKey:   os.Getenv("CLAUDE_API_KEY"),
 		QoveryAPIKey:   os.Getenv("QOVERY_API_KEY"),
 		AllowedOrigins: []string{"http://localhost:3000", "https://migrate.qovery.com"},
@@ -27,7 +26,7 @@ func main() {
 	r.Use(cors.New(corsConfig))
 
 	// Routes
-	r.POST("/api/migrate", handlers.MigrateHandlerWithConfig(config))
+	r.POST("/api/migrate/heroku", handlers.HerokuMigrateHandler(config))
 
 	// Get port from environment variable or use default
 	port := os.Getenv("SERVER_PORT")
