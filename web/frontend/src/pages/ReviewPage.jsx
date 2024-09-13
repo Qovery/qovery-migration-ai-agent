@@ -9,6 +9,8 @@ function ReviewPage({migrationData}) {
 
     const API_HOST_URL = process.env.REACT_APP_API_HOST_URL || 'http://localhost:8080';
 
+    console.log(migrationData);
+
     useEffect(() => {
         const generateFiles = async () => {
             setIsLoading(true);

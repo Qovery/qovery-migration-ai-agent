@@ -7,14 +7,14 @@ function CredentialsPage({ migrationData, setMigrationData }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        const credentials = {};
+        const data = {};
 
         const formData = new FormData(e.target);
         for (let [key, value] of formData.entries()) {
-            credentials[key] = value;
+            data[key] = value;
         }
 
-        setMigrationData(prev => ({ ...prev, credentials }));
+        setMigrationData(prev => ({ ...prev, ...data }));
         navigate('/review');
     };
 

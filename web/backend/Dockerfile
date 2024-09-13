@@ -1,6 +1,9 @@
 # Start from the official golang image
 FROM golang:1.22-alpine AS builder
 
+# Install build dependencies
+RUN apk add --no-cache git
+
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -19,11 +22,21 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 # Start a new stage from scratch
 FROM alpine:latest
 
+# Install dependencies for Terraform
+RUN apk add --no-cache wget unzip
+
 # Set the working directory
 WORKDIR /root/
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/main .
+
+# Download and install Terraform
+ENV TERRAFORM_VERSION=1.9.5
+RUN wget https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip \
+    && unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip \
+    && mv terraform /usr/local/bin/ \
+    && rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip
 
 # Expose the port the app runs on
 EXPOSE 8080

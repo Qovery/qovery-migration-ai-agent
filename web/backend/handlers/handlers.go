@@ -20,10 +20,9 @@ type Config struct {
 }
 
 type HerokuMigrationRequest struct {
-	Source       string            `json:"source"`
-	Destination  string            `json:"destination"`
-	HerokuAPIKey string            `json:"herokuApiKey"`
-	Credentials  map[string]string `json:"credentials"`
+	Source       string `json:"source"`
+	Destination  string `json:"destination"`
+	HerokuAPIKey string `json:"herokuApiKey"`
 }
 
 func HerokuMigrateHandler(config Config) gin.HandlerFunc {

@@ -9,7 +9,7 @@ import Footer from "./components/Footer";
 
 function App() {
     const [migrationData, setMigrationData] = useState({
-        source: '', destination: '', credentials: {},
+        source: '', destination: '',
     });
 
     return (
