@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/claude"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/heroku"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
 	"github.com/google/go-github/v39/github"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"qovery-ai-migration/pkg/claude"
-	"qovery-ai-migration/pkg/heroku"
-	"qovery-ai-migration/pkg/qovery"
 	"strings"
 )
 

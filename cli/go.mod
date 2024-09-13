@@ -1,4 +1,4 @@
-module qovery-ai-migration-cli
+module qovery-ai-migration
 
 go 1.22.5
 
