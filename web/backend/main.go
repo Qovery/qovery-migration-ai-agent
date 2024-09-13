@@ -6,30 +6,35 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"log"
+	"net/http"
 	"os"
 )
 
 func main() {
 	config := handlers.Config{
 		ClaudeAPIKey: os.Getenv("CLAUDE_API_KEY"),
-		AllowedOrigins: []string{
-			"http://localhost:3000",
-			"https://migrate.qovery.com",
-			os.Getenv("FRONTEND_HOST_URL"),
-		},
 	}
 
 	r := gin.Default()
 
 	// Configure CORS
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = config.AllowedOrigins
+	corsConfig.AllowOrigins = []string{
+		"http://localhost:3000",
+		"https://migrate.qovery.com",
+		os.Getenv("FRONTEND_HOST_URL"),
+	}
 	corsConfig.AllowMethods = []string{"GET", "POST", "OPTIONS"}
 	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept"}
 	r.Use(cors.New(corsConfig))
 
 	// Routes
 	r.POST("/api/migrate/heroku", handlers.HerokuMigrateHandler(config))
+
+	// Handle preflight requests
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
 	// Get port from environment variable or use default
 	port := os.Getenv("SERVER_PORT")

@@ -14,9 +14,8 @@ import (
 )
 
 type Config struct {
-	ClaudeAPIKey   string
-	QoveryAPIKey   string
-	AllowedOrigins []string
+	ClaudeAPIKey string
+	QoveryAPIKey string
 }
 
 type HerokuMigrationRequest struct {
