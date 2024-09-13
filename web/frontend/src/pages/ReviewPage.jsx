@@ -1,98 +1,74 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, {useEffect, useState} from 'react';
+import {useNavigate} from 'react-router-dom';
 import '../index.css';
 
-function ReviewPage({ migrationData }) {
-    const [files, setFiles] = useState({ terraform: '', dockerfile: '' });
+function ReviewPage({migrationData}) {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
+
+    const API_HOST_URL = process.env.REACT_APP_API_HOST_URL || 'http://localhost:8080';
 
     useEffect(() => {
         const generateFiles = async () => {
             setIsLoading(true);
             setError(null);
             try {
-                const response = await fetch('http://localhost:8080/api/migrate', {
-                    method: 'POST',
-                    headers: {
+                const provider = migrationData.source.toLowerCase(); // Assuming source indicates the provider (e.g., 'heroku')
+                const response = await fetch(`${API_HOST_URL}/api/migrate/${provider}`, {
+                    method: 'POST', headers: {
                         'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(migrationData),
+                    }, body: JSON.stringify(migrationData),
                 });
+
                 if (!response.ok) throw new Error('Failed to generate migration files');
-                setFiles({
-                    terraform: await fetchFile('terraform.tf'),
-                    dockerfile: await fetchFile('Dockerfile'),
-                });
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${provider}-migration.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                setIsLoading(false);
             } catch (error) {
                 console.error('Error generating files:', error);
                 setError('Failed to generate migration files. Please try again.');
-            } finally {
                 setIsLoading(false);
             }
         };
         generateFiles();
-    }, [migrationData]);
-
-    const fetchFile = async (filename) => {
-        const response = await fetch(`http://localhost:8080/api/download/${filename}`);
-        return await response.text();
-    };
-
-    const handleDownload = (content, filename) => {
-        const blob = new Blob([content], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
+    }, [migrationData, API_HOST_URL]);
 
     if (isLoading) {
-        return (
-            <div className="container">
+        return (<div className="container">
                 <div className="migration-form">
                     <p className="subtitle">Generating migration files...</p>
                     {/* You can add a loading spinner here */}
                 </div>
-            </div>
-        );
+            </div>);
     }
 
     if (error) {
-        return (
-            <div className="container">
+        return (<div className="container">
                 <div className="migration-form">
                     <p className="subtitle">{error}</p>
                     <button onClick={() => navigate('/')} className="btn btn-primary">
                         Start Over
                     </button>
                 </div>
-            </div>
-        );
+            </div>);
     }
 
-    return (
-        <div className="container">
+    return (<div className="container">
             <section className="hero">
-                <h2 className="subtitle">Review Generated Files</h2>
+                <h2 className="subtitle">Migration Files Generated</h2>
                 <div className="migration-form">
-                    <div className="form-group">
-                        <h3 className="section-title">Terraform Manifest:</h3>
-                        <pre className="code-preview">{files.terraform}</pre>
-                        <button onClick={() => handleDownload(files.terraform, 'terraform.tf')} className="btn btn-secondary">
-                            Download Terraform
-                        </button>
-                    </div>
-                    <div className="form-group">
-                        <h3 className="section-title">Dockerfile:</h3>
-                        <pre className="code-preview">{files.dockerfile}</pre>
-                        <button onClick={() => handleDownload(files.dockerfile, 'Dockerfile')} className="btn btn-secondary">
-                            Download Dockerfile
-                        </button>
-                    </div>
+                    <p>Your migration files have been generated and downloaded as a zip archive.</p>
+                    <p>Please check your downloads folder for the zip file.</p>
                     <div className="button-group">
                         <button onClick={() => navigate('/')} className="btn btn-secondary">
                             Start Over
@@ -103,8 +79,7 @@ function ReviewPage({ migrationData }) {
                     </div>
                 </div>
             </section>
-        </div>
-    );
+        </div>);
 }
 
 export default ReviewPage;
