@@ -138,7 +138,13 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 
 	airbyteExample, err := loadTerraformExamples("evoxmusic", "qovery-airbyte", ".")
 	if err != nil {
-		return "", "", fmt.Errorf("error loading Terraform examples: %w", err)
+		return "", "", fmt.Errorf("error loading Airbyte Terraform example: %w", err)
+	}
+
+	// https://github.com/Qovery/terraform-provider-qovery/tree/main/docs
+	qoveryTerraformDocMarkdown, err := loadMarkdownFiles("Qovery", "terraform-provider-qovery", "main")
+	if err != nil {
+		return "", "", fmt.Errorf("error loading Qovery Terraform Provide markdown documentation: %w", err)
 	}
 
 	examples := append(officialExamples, airbyteExample...)
@@ -146,6 +152,11 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 	examplesJSON, err := json.Marshal(examples)
 	if err != nil {
 		return "", "", fmt.Errorf("error marshaling Terraform examples: %w", err)
+	}
+
+	qoveryTerraformDocMarkdownJSON, err := json.Marshal(qoveryTerraformDocMarkdown)
+	if err != nil {
+		return "", "", fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
 	}
 
 	prompt := fmt.Sprintf(`Generate a consolidated Terraform configuration for Qovery that includes all of the following apps:
@@ -159,8 +170,13 @@ Provide two separate configurations:
 Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content).
 Don't use Buildpacks, only use Dockerfiles for build_mode.
 Don't format the output by using backticks.
-Do not include anything else.`,
-		string(configJSON), destination, string(examplesJSON), destination)
+Export secrets or sensitive information from the main.tf file into the variables.tf and don't include the sensitive data.
+Do not include anything else.
+Try to optimize the configuration as much as possible.
+Include comment to explain the configuration if needed - users are technical but can be not familiar with Terraform.
+
+Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
+%s`, string(configJSON), destination, string(examplesJSON), destination, string(qoveryTerraformDocMarkdownJSON))
 
 	response, err := claudeClient.Messages(prompt)
 	if err != nil {
@@ -213,6 +229,45 @@ func loadTerraformExamples(owner string, repo string, exampleDir string) ([]Terr
 	}
 
 	return examples, nil
+}
+
+func loadMarkdownFiles(owner, repo, branch string) (map[string]string, error) {
+	client := github.NewClient(nil)
+	ctx := context.Background()
+
+	result := make(map[string]string)
+
+	// Folders to search
+	folders := []string{"", "data-sources", "resources"}
+
+	for _, folder := range folders {
+		// List files in the folder
+		_, directoryContent, _, err := client.Repositories.GetContents(ctx, owner, repo, "docs/"+folder, &github.RepositoryContentGetOptions{Ref: branch})
+		if err != nil {
+			return nil, fmt.Errorf("error listing contents of %s: %v", folder, err)
+		}
+
+		for _, content := range directoryContent {
+			if content.GetType() == "file" && strings.HasSuffix(content.GetName(), ".md") {
+				// Get file content
+				fileContent, _, _, err := client.Repositories.GetContents(ctx, owner, repo, content.GetPath(), &github.RepositoryContentGetOptions{Ref: branch})
+				if err != nil {
+					return nil, fmt.Errorf("error getting content of %s: %v", content.GetPath(), err)
+				}
+
+				// Decode content
+				decodedContent, err := fileContent.GetContent()
+				if err != nil {
+					return nil, fmt.Errorf("error decoding content of %s: %v", content.GetPath(), err)
+				}
+
+				// Add to result map
+				result[content.GetPath()] = decodedContent
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // parseTerraformResponse parses the Claude AI response for Terraform configurations
