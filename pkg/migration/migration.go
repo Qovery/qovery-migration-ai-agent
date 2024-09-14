@@ -156,7 +156,7 @@ Use the following Terraform examples as reference:
 Provide two separate configurations:
 1. A main.tf file containing the full Terraform configuration for all apps.
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
-Format the response as a tuple of two strings: (main_tf_content, variables_tf_content).
+Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content).
 Don't use Buildpacks, only use Dockerfiles for build_mode.
 Don't format the output by using backticks.
 Do not include anything else.`,
@@ -223,9 +223,10 @@ func parseTerraformResponse(response string) (string, string, error) {
 	}
 
 	content := response[1 : len(response)-1]
-	parts := strings.SplitN(content, ",", 2)
+
+	parts := strings.SplitN(content, "|||", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid response format")
+		return "", "", fmt.Errorf("ParseTerraformResponse invalid response format")
 	}
 
 	// trim leading and trailing whitespace
