@@ -25,6 +25,16 @@ type AppConfig struct {
 	Domains []map[string]interface{}
 }
 
+// Map returns a map representation of the AppConfig
+func (a AppConfig) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"app":     a.App,
+		"config":  a.Config,
+		"addons":  a.Addons,
+		"domains": a.Domains,
+	}
+}
+
 // NewHerokuProvider creates a new HerokuProvider with the given API key
 func NewHerokuProvider(apiKey string) *HerokuProvider {
 	return &HerokuProvider{
