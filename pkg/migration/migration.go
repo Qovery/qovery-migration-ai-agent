@@ -64,7 +64,7 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, d
 	totalApps := len(configs)
 	for i, app := range configs {
 		appName := app.App["name"].(string)
-		qoveryConfig := qoveryProvider.TranslateConfig(app.App, destination)
+		qoveryConfig := qoveryProvider.TranslateConfig(appName, app.Map(), destination)
 		qoveryConfigs[appName] = qoveryConfig
 
 		dockerfile, err := generateDockerfile(app.App, claudeClient)

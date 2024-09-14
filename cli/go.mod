@@ -3,7 +3,7 @@ module qovery-ai-migration
 go 1.22.5
 
 require (
-	github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240913112237-53423fc0d9da
+	github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240914125121-28dd7ea7aaa6
 	github.com/joho/godotenv v1.5.1
 	github.com/schollz/progressbar/v3 v3.14.6
 	github.com/spf13/cobra v1.8.1
@@ -16,7 +16,7 @@ require (
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
-	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/term v0.22.0 // indirect
+	golang.org/x/crypto v0.27.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/term v0.24.0 // indirect
 )

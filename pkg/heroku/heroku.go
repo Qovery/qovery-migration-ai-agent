@@ -7,6 +7,10 @@ import (
 	"sync"
 )
 
+const (
+	herokuAPIRootURL = "https://api.heroku.com"
+)
+
 // HerokuProvider represents a client for interacting with the Heroku API
 type HerokuProvider struct {
 	APIKey string
@@ -15,9 +19,10 @@ type HerokuProvider struct {
 
 // AppConfig represents the configuration for a Heroku app
 type AppConfig struct {
-	App    map[string]interface{}
-	Config map[string]string
-	Addons []map[string]interface{}
+	App     map[string]interface{}
+	Config  map[string]string
+	Addons  []map[string]interface{}
+	Domains []map[string]interface{}
 }
 
 // NewHerokuProvider creates a new HerokuProvider with the given API key
@@ -28,7 +33,7 @@ func NewHerokuProvider(apiKey string) *HerokuProvider {
 	}
 }
 
-// GetAllAppsConfig retrieves the configuration for all Heroku apps, including env vars and addons
+// GetAllAppsConfig retrieves the configuration for all Heroku apps, including env vars, addons, and domains
 func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 	apps, err := h.getApps()
 	if err != nil {
@@ -53,10 +58,16 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 				fmt.Printf("Error fetching addons for app %s: %v\n", appName, err)
 				return
 			}
+			domains, err := h.getAppDomains(appName)
+			if err != nil {
+				fmt.Printf("Error fetching domains for app %s: %v\n", appName, err)
+				return
+			}
 			configs[i] = AppConfig{
-				App:    app,
-				Config: config,
-				Addons: addons,
+				App:     app,
+				Config:  config,
+				Addons:  addons,
+				Domains: domains,
 			}
 		}(i, app)
 	}
@@ -67,17 +78,22 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 }
 
 func (h *HerokuProvider) getApps() ([]map[string]interface{}, error) {
-	url := "https://api.heroku.com/apps"
+	url := fmt.Sprintf("%s/apps", herokuAPIRootURL)
 	return h.makeRequest(url)
 }
 
 func (h *HerokuProvider) getAppConfig(appName string) (map[string]string, error) {
-	url := fmt.Sprintf("https://api.heroku.com/apps/%s/config-vars", appName)
+	url := fmt.Sprintf("%s/apps/%s/config-vars", herokuAPIRootURL, appName)
 	return h.makeRequestConfig(url)
 }
 
 func (h *HerokuProvider) getAppAddons(appName string) ([]map[string]interface{}, error) {
-	url := fmt.Sprintf("https://api.heroku.com/apps/%s/addons", appName)
+	url := fmt.Sprintf("%s/apps/%s/addons", herokuAPIRootURL, appName)
+	return h.makeRequest(url)
+}
+
+func (h *HerokuProvider) getAppDomains(appName string) ([]map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/apps/%s/domains", herokuAPIRootURL, appName)
 	return h.makeRequest(url)
 }
 
@@ -95,6 +111,10 @@ func (h *HerokuProvider) makeRequest(url string) ([]map[string]interface{}, erro
 		return nil, fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
 	var result []map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&result)
@@ -115,14 +135,14 @@ func (h *HerokuProvider) makeRequestConfig(url string) (map[string]string, error
 	req.Header.Add("Accept", "application/vnd.heroku+json; version=3")
 
 	resp, err := h.Client.Do(req)
-	if err != nil && resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("error sending request: unauthorized")
-	}
-
 	if err != nil {
 		return nil, fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
 	var result map[string]string
 	err = json.NewDecoder(resp.Body).Decode(&result)
