@@ -167,15 +167,18 @@ Use the following Terraform examples as reference:
 Provide two separate configurations:
 1. A main.tf file containing the full Terraform configuration for all apps.
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
-Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content).
-Don't use Buildpacks, only use Dockerfiles for build_mode.
-Don't format the output by using backticks.
-Export secrets or sensitive information from the main.tf file into the variables.tf and don't include the sensitive data.
-Do not include anything else.
-Try to optimize the configuration as much as possible.
-Include comment to explain the configuration if needed - users are technical but can be not familiar with Terraform.
+Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else.
+I need to be able to parse the response to extract the Terraform configurations.
 
-Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
+Instructions:
+- Don't use Buildpacks, only use Dockerfiles for build_mode.
+- Export secrets or sensitive information from the main.tf file into the variables.tf with no default value.
+- If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.
+- If an application to another application via the environment variables, make sure to use the "environment_variable_aliases" from the Qovery Terraform Provider resource (if available. cf doc).
+- If in the service you see an application that can be provided by a container image from the DockerHub, use the "container_image" from the Qovery Terraform Provider resource (if available. cf doc).
+- Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
+- Try to optimize the Terraform configuration as much as possible.
+- Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
 %s`, string(configJSON), destination, string(examplesJSON), destination, string(qoveryTerraformDocMarkdownJSON))
 
 	response, err := claudeClient.Messages(prompt)
