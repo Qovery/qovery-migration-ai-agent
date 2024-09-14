@@ -12,7 +12,7 @@ const icons = {
     azure: <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512"><path fill="#0089D6" d="M255.992 31.707L110.095 234.943l168.324 235.272h-74.345L31.789 234.944 178.615 31.707h77.377zm37.218 0l72.331 128.223L480.211 480.21H406.62l-98.476-172.732-69.278-124.915h54.344z"/></svg>
 };
 
-function HomePage({ setMigrationData }) {
+function SelectPage({ setMigrationData }) {
     const navigate = useNavigate();
 
     const handleSubmit = (e) => {
@@ -54,4 +54,4 @@ function HomePage({ setMigrationData }) {
     );
 }
 
-export default HomePage;
+export default SelectPage;
