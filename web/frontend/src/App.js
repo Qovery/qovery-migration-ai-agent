@@ -20,8 +20,18 @@ function App() {
                         <div className="header-content">
                             <h1 className="site-title">Qovery Migration</h1>
                             <nav className="site-nav">
-                                <button className="btn btn-secondary">Contact</button>
-                                <button className="btn btn-primary">Sign Up</button>
+                                <a href="https://github.com/Qovery/qovery-migration-ai-agent"
+                                   className="btn btn-secondary"
+                                   target="_blank"
+                                   rel="noopener noreferrer">
+                                    GitHub
+                                </a>
+                                <a href="https://console.qovery.com"
+                                   className="btn btn-primary"
+                                   target="_blank"
+                                   rel="noopener noreferrer">
+                                    Sign Up
+                                </a>
                             </nav>
                         </div>
                     </div>
