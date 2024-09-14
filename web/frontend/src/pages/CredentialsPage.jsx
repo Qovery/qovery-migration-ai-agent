@@ -1,8 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import {useNavigate} from 'react-router-dom';
+import {Info, Github, GithubIcon} from 'lucide-react';
 import '../index.css';
 
-function CredentialsPage({ migrationData, setMigrationData }) {
+function CredentialsPage({migrationData, setMigrationData}) {
     const navigate = useNavigate();
 
     const handleSubmit = (e) => {
@@ -14,34 +15,52 @@ function CredentialsPage({ migrationData, setMigrationData }) {
             data[key] = value;
         }
 
-        setMigrationData(prev => ({ ...prev, ...data }));
+        setMigrationData(prev => ({...prev, ...data}));
         navigate('/review');
     };
 
     const renderInputs = () => {
         switch (migrationData.source) {
             case 'heroku':
-                return (
-                    <div className="form-group">
-                        <label htmlFor="herokuApiKey">Heroku API Key:</label>
-                        <input type="password" id="herokuApiKey" name="herokuApiKey" className="input-field" required />
-                    </div>
-                );
+                return (<div className="form-group">
+                        <label htmlFor="herokuApiKey" className="flex items-center">
+                            Heroku API Key
+                            <a
+                                href="https://help.heroku.com/PBGP6IDE/how-should-i-generate-an-api-key-that-allows-me-to-use-the-heroku-platform-api"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2"
+                                title="Learn how to create an API token"
+                            >
+                                <Info size={16} className="inline-link"/>
+                            </a>
+                        </label>
+                        <input type="password" id="herokuApiKey" name="herokuApiKey" className="input-field" required/>
+                    </div>);
             default:
                 return null;
         }
     };
 
-    return (
-        <div className="container">
-            <p className="subtitle">Provide the necessary credentials for your {migrationData.source} to {migrationData.destination} migration.</p>
+    return (<div className="container">
+            <p className="subtitle">Provide the necessary credentials for
+                your {migrationData.source} to {migrationData.destination} migration.</p>
 
             <form onSubmit={handleSubmit} className="migration-form">
                 <h2 className="section-title">Source: {migrationData.source}</h2>
                 {renderInputs()}
 
-                <p className="security-note">
+                <p className="security-note flex items-center">
                     🔒 Your credentials are securely processed and not stored. They are only used for this migration.
+                    <a
+                        href="https://github.com/Qovery/qovery-migration-ai-agent"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 flex items-center inline-link"
+                        title="Check out the code on GitHub"
+                    >
+                        <GithubIcon size={24} className="mr-1"/>
+                    </a>
                 </p>
 
                 <div className="button-group">
@@ -49,8 +68,7 @@ function CredentialsPage({ migrationData, setMigrationData }) {
                     <button type="submit" className="btn btn-primary">Next</button>
                 </div>
             </form>
-        </div>
-    );
+        </div>);
 }
 
 export default CredentialsPage;
