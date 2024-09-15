@@ -182,6 +182,7 @@ The output must look like this:
 
 Generate a consolidated Terraform configuration for Qovery that includes all of the following apps:
 %s
+
 The configuration should be for the %s cloud provider.
 Use the following Terraform examples as reference:
 %s
@@ -195,7 +196,7 @@ Additional instructions:
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - Try to optimize the Terraform configuration as much as possible.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
-%s`, string(configJSON), destination, string(examplesJSON), destination, string(qoveryTerraformDocMarkdownJSON))
+%s`, destination, string(configJSON), destination, string(examplesJSON), string(qoveryTerraformDocMarkdownJSON))
 
 	response, err := claudeClient.Messages(prompt)
 	if err != nil {
