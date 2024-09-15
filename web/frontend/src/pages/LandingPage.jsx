@@ -1,16 +1,22 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {Link} from 'react-router-dom';
-import Mermaid from 'react-mermaid2';
+import mermaid from 'mermaid';
 import './LandingPage.css';
+import '../mermaid.css';
 
 const LandingPage = () => {
+    useEffect(() => {
+        mermaid.initialize({startOnLoad: true, theme: 'dark'});
+    }, []);
+
     return (<div className="landing-page">
         <div className="hero">
             <h1>Qovery AI Migration Agent</h1>
             <p className="subtitle">
                 Simplify your application migration process with Qovery AI Migration Agent. Our tool is designed to
                 facilitate the migration of applications from various platforms to AWS, GCP, Scaleway and Azure via
-                &nbsp;<a href="https://www.qovery.com" target="_blank" className="inline-link">Qovery</a>.
+                &nbsp;<a href="https://www.qovery.com" target="_blank" rel="noopener noreferrer"
+                         className="inline-link">Qovery</a>.
             </p>
             <div className="hero-buttons">
                 <Link to="/select" className="cta-button">Get Started</Link>
@@ -47,22 +53,24 @@ const LandingPage = () => {
 
         <section className="how-it-works">
             <h2>How It Works</h2>
-            <div className="diagram-container">
-                <Mermaid chart={`
-                    graph TD
-                        A[Start] --> B[Input Source Platform Details Heroku/Render]
-                        B --> C[Select Destination Platform AWS/GCP/Azure/Scaleway]
-                        C --> D[Analyze Application Structure]
-                        D --> E[Generate Terraform and Dockerfile Configurations]
-                        E --> F[Estimate Migration Costs]
-                        F --> G[Generate Zip File with Migration Files]
-                        G --> H[You Can Download and Review the Migration Files]
-                        H --> I[Verify Deployment]
-                        I --> J[End]
-                    `}/>
+            <div>
+                <div className="mermaid">
+                    {`
+                        graph TD
+                            A[Start] --> B[Input Source Platform Details Heroku/Render]
+                            B --> C[Select Destination Platform AWS/GCP/Azure/Scaleway]
+                            C --> D[Analyze Application Structure]
+                            D --> E[Generate Terraform and Dockerfile Configurations]
+                            E --> F[Estimate Migration Costs]
+                            F --> G[Generate Zip File with Migration Files]
+                            G --> H[You Can Download and Review the Migration Files]
+                            H --> I[End]
+                        `}
+                </div>
                 <p className="diagram-explanation">
                     This diagram illustrates the step-by-step process of migrating your application using Qovery AI
-                    Migration Agent. From inputting your source platform details to verifying the deployment, our tool guides you
+                    Migration Agent. From inputting your source platform details to verifying the deployment, our
+                    tool guides you
                     through each stage, ensuring a smooth and efficient migration experience.
                 </p>
             </div>

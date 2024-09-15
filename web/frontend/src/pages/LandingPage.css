@@ -82,26 +82,6 @@
     color: #7559FF;
 }
 
-.landing-page .how-it-works .diagram-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.landing-page .how-it-works svg {
-    max-width: 100%;
-    height: auto;
-    border: 1px solid #7559FF;
-    border-radius: 8px;
-    background-color: rgba(117, 89, 255, 0.1);
-    margin-bottom: 2rem;
-}
-
-.landing-page .diagram-explanation {
-    max-width: 800px;
-    text-align: center;
-}
-
 .landing-page .security-note {
     background-color: rgba(117, 89, 255, 0.1);
     border-left: 4px solid #7559FF;

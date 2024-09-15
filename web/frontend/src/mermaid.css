@@ -1,0 +1,49 @@
+.mermaid {
+    background-color: rgba(117, 89, 255, 0.1);
+    border: 1px solid #7559FF;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+}
+
+.mermaid svg {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+}
+
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node ellipse,
+.mermaid .node polygon,
+.mermaid .node path {
+    fill: #2a2b3e;
+    stroke: #7559FF;
+    stroke-width: 2px;
+}
+
+.mermaid .edgePath .path {
+    stroke: #7559FF;
+    stroke-width: 2px;
+}
+
+.mermaid .arrowheadPath {
+    fill: #7559FF;
+}
+
+.mermaid .labelText {
+    fill: #e0e0e0;
+}
+
+.mermaid .diagram-explanation {
+    max-width: 800px;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .mermaid {
+        padding: 10px;
+    }
+}
