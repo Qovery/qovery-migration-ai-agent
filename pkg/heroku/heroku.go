@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
 const (
@@ -17,12 +18,13 @@ type HerokuProvider struct {
 	Client *http.Client
 }
 
-// AppConfig represents the configuration for a Heroku app
+// AppConfig represents the configuration for a Heroku app, including costs
 type AppConfig struct {
 	App     map[string]interface{}
 	Config  map[string]string
 	Addons  []map[string]interface{}
 	Domains []map[string]interface{}
+	Cost    float64
 }
 
 // Map returns a map representation of the AppConfig
@@ -32,6 +34,7 @@ func (a AppConfig) Map() map[string]interface{} {
 		"config":  a.Config,
 		"addons":  a.Addons,
 		"domains": a.Domains,
+		"cost":    a.Cost,
 	}
 }
 
@@ -43,7 +46,7 @@ func NewHerokuProvider(apiKey string) *HerokuProvider {
 	}
 }
 
-// GetAllAppsConfig retrieves the configuration for all Heroku apps, including env vars, addons, and domains
+// GetAllAppsConfig retrieves the configuration for all Heroku apps, including env vars, addons, domains, and costs
 func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 	apps, err := h.getApps()
 	if err != nil {
@@ -73,11 +76,17 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 				fmt.Printf("Error fetching domains for app %s: %v\n", appName, err)
 				return
 			}
+			cost, err := h.getAppCost(appName)
+			if err != nil {
+				fmt.Printf("Error fetching cost for app %s: %v\n", appName, err)
+				return
+			}
 			configs[i] = AppConfig{
 				App:     app,
 				Config:  config,
 				Addons:  addons,
 				Domains: domains,
+				Cost:    cost,
 			}
 		}(i, app)
 	}
@@ -105,6 +114,33 @@ func (h *HerokuProvider) getAppAddons(appName string) ([]map[string]interface{},
 func (h *HerokuProvider) getAppDomains(appName string) ([]map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/apps/%s/domains", herokuAPIRootURL, appName)
 	return h.makeRequest(url)
+}
+
+func (h *HerokuProvider) getAppCost(appName string) (float64, error) {
+	now := time.Now()
+	startOfPeriod := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	url := fmt.Sprintf("%s/apps/%s/formation", herokuAPIRootURL, appName)
+
+	formations, err := h.makeRequest(url)
+	if err != nil {
+		return 0, err
+	}
+
+	var totalCost float64
+	daysInPeriod := float64(now.Sub(startOfPeriod).Hours() / 24)
+
+	for _, formation := range formations {
+		quantity, _ := formation["quantity"].(float64)
+		size, _ := formation["size"].(map[string]interface{})
+		price, _ := size["price"].(map[string]interface{})
+		cents, _ := price["cents"].(float64)
+
+		// Calculate daily cost and multiply by the number of days in the current period
+		dailyCost := (cents / 100) * quantity * (24 / 720) // Heroku bills hourly, so we divide by 720 (30 days * 24 hours)
+		totalCost += dailyCost * daysInPeriod
+	}
+
+	return totalCost, nil
 }
 
 func (h *HerokuProvider) makeRequest(url string) ([]map[string]interface{}, error) {

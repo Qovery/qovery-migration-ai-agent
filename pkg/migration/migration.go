@@ -4,23 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Qovery/qovery-migration-ai-agent/pkg/claude"
-	"github.com/Qovery/qovery-migration-ai-agent/pkg/heroku"
-	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
-	"github.com/google/go-github/v39/github"
-	"golang.org/x/oauth2"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/claude"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/heroku"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
+	"github.com/google/go-github/v39/github"
+	"golang.org/x/oauth2"
 )
 
 // Assets represents the generated assets for migration
 type Assets struct {
-	TerraformMain      string
-	TerraformVariables string
-	Dockerfiles        []Dockerfile
+	TerraformMain                string
+	TerraformVariables           string
+	Dockerfiles                  []Dockerfile
+	CostEstimationReportMarkdown string
 }
 
 // Dockerfile represents a generated Dockerfile for an app
@@ -62,11 +64,14 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 	var qoveryConfigs = make(map[string]interface{})
 	var dockerfiles []Dockerfile
 
+	var currentCost = 0.0
+
 	totalApps := len(configs)
 	for i, app := range configs {
 		appName := app.App["name"].(string)
 		qoveryConfig := qoveryProvider.TranslateConfig(appName, app.Map(), destination)
 		qoveryConfigs[appName] = qoveryConfig
+		currentCost += app.Cost
 
 		dockerfile, err := generateDockerfile(app.App, claudeClient)
 		if err != nil {
@@ -89,12 +94,18 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
 	}
 
-	progressChan <- ProgressUpdate{Stage: "Finalizing", Progress: 0.9}
+	progressChan <- ProgressUpdate{Stage: "Estimating costs", Progress: 0.9}
+
+	costEstimation, err := EstimateWorkloadCosts(terraformMain, currentCost, claudeClient)
+	if err != nil {
+		return nil, fmt.Errorf("error estimating workload costs: %w", err)
+	}
 
 	assets := &Assets{
-		TerraformMain:      terraformMain,
-		TerraformVariables: terraformVariables,
-		Dockerfiles:        dockerfiles,
+		TerraformMain:                terraformMain,
+		TerraformVariables:           terraformVariables,
+		Dockerfiles:                  dockerfiles,
+		CostEstimationReportMarkdown: costEstimation,
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Completed", Progress: 1.0}
@@ -110,19 +121,12 @@ func generateDockerfile(appConfig map[string]interface{}, claudeClient *claude.C
 	}
 
 	prompt := fmt.Sprintf(`Generate a Dockerfile for the following app configuration:\n%s\n\n
-
 Instructions:
 - You should find all the information you need like the language, the potential framework and the version associated.
 - The Dockerfile should be optimized for the best performance and security.
 - Generate just the Dockerfile content and nothing else.
-`,
-		string(configJSON))
+`, string(configJSON))
 	return claudeClient.Messages(prompt)
-}
-
-type TerraformExample struct {
-	Name    string
-	Content string
 }
 
 // generateTerraform generates Terraform configurations for Qovery
@@ -142,10 +146,9 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 		return "", "", fmt.Errorf("error loading Airbyte Terraform example: %w", err)
 	}
 
-	// https://github.com/Qovery/terraform-provider-qovery/tree/main/docs
 	qoveryTerraformDocMarkdown, err := loadMarkdownFiles("Qovery", "terraform-provider-qovery", "main", githubToken)
 	if err != nil {
-		return "", "", fmt.Errorf("error loading Qovery Terraform Provide markdown documentation: %w", err)
+		return "", "", fmt.Errorf("error loading Qovery Terraform Provider markdown documentation: %w", err)
 	}
 
 	examples := append(officialExamples, airbyteExample...)
@@ -165,20 +168,6 @@ Provide two separate configurations
 1. A main.tf file containing the full Terraform configuration for all apps.
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
 Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else. No introduction our final sentences.
-
-The output must look like this:
----
-(terraform {
-		required_providers {
-			qovery = {
-			source = "qovery/qovery"
-		}
-	}
-}|||variable "qovery_access_token" {
-	type        = string
-	description = "Qovery API token"
-})
----
 
 Generate a consolidated Terraform configuration for Qovery that includes all of the following apps:
 %s
@@ -218,6 +207,62 @@ Additional instructions:
 	return finalMainTf, variablesTf, nil
 }
 
+// EstimateWorkloadCosts estimates the costs of running the workload and provides a comparison report
+func EstimateWorkloadCosts(mainTfContent string, currentCosts float64, claudeClient *claude.ClaudeClient) (string, error) {
+	// Prepare the prompt for Claude
+	prompt := fmt.Sprintf(`Given the following Terraform configuration for Qovery:
+
+%s
+
+And the following comparison information between Qovery + Cloud Provider and Heroku:
+
+| Feature | Qovery + Cloud Provider | Heroku |
+|---------|-------------------------|--------|
+| Applications run in your own cloud | ✅ | ❌ |
+| Private VPC | ✅ | Enterprise only |
+| Autoscaling | ✅ | Performance dynos only |
+| Multiple Single tenant infrastructure | ✅ | ❌ |
+| SOC2 & HIPAA compliance | ✅ | Enterprise only |
+| Microservices support | ✅ | ❌ |
+| Mono repository support | ✅ | ❌ |
+| Static IPs | ✅ | ❌ |
+| Global regions availability | Many (US, EU, Asia, etc.) | Limited (US, EU, AU) |
+| Cost at scale (150 instances) | $31K/year | $450K/year |
+
+Please provide a comprehensive cost estimation report in Markdown format. Include the following:
+
+1. Estimated monthly costs for running this workload on the cloud provider specified in the Terraform configuration.
+2. A detailed breakdown of the costs for each resource.
+3. Comparison with the current costs of $%.2f per month on Heroku.
+4. An analysis of cost-effectiveness, considering both direct costs and potential indirect savings from improved features and flexibility.
+5. Estimated costs if the workload were to be run on other major cloud providers (AWS, GCP, Azure) for comparison.
+6. A summary recommendation on whether to proceed with the migration, considering both costs and feature benefits.
+
+Also, include the following Qovery-specific costs in your calculations:
+- Managed cluster: $199/month (or $0 if using a self-managed Kubernetes cluster)
+- 1 user: $29/month
+- Deployment: $0.16 per minute (free up to 1000 minutes per month if using their own CI/CD)
+
+Consider potential cost savings from:
+- More efficient resource utilization
+- Autoscaling capabilities
+- Reduced need for enterprise-level features that are standard with Qovery
+- Improved developer productivity due to better tooling and flexibility
+
+Provide a comprehensive report that a decision-maker could use to determine if migration is worthwhile, considering both immediate cost impacts and long-term strategic benefits.`, mainTfContent, currentCosts)
+
+	// Get Claude's response
+	response, err := claudeClient.Messages(prompt)
+	if err != nil {
+		return "", fmt.Errorf("error getting response from Claude: %w", err)
+	}
+
+	// Append contact information
+	response += "\n\nFor more information or if you have any questions about migrating from Heroku to Qovery, please contact us at hello@qovery.com."
+
+	return response, nil
+}
+
 // NewGitHubClient creates a new GitHub client with optional authentication
 func NewGitHubClient(token string) *github.Client {
 	ctx := context.Background()
@@ -231,7 +276,7 @@ func NewGitHubClient(token string) *github.Client {
 	return github.NewClient(nil)
 }
 
-func loadTerraformExamples(owner, repo, exampleDir, token string) ([]TerraformExample, error) {
+func loadTerraformExamples(owner, repo, exampleDir, token string) ([]map[string]string, error) {
 	client := NewGitHubClient(token)
 
 	_, dirContent, _, err := client.Repositories.GetContents(context.Background(), owner, repo, exampleDir, nil)
@@ -239,7 +284,7 @@ func loadTerraformExamples(owner, repo, exampleDir, token string) ([]TerraformEx
 		return nil, fmt.Errorf("error fetching repository contents: %w", err)
 	}
 
-	var examples []TerraformExample
+	var examples []map[string]string
 
 	for _, content := range dirContent {
 		if content.GetType() == "dir" {
@@ -254,9 +299,9 @@ func loadTerraformExamples(owner, repo, exampleDir, token string) ([]TerraformEx
 				return nil, fmt.Errorf("error decoding file content: %w", err)
 			}
 
-			examples = append(examples, TerraformExample{
-				Name:    content.GetName(),
-				Content: decodedContent,
+			examples = append(examples, map[string]string{
+				"name":    content.GetName(),
+				"content": decodedContent,
 			})
 		}
 	}
