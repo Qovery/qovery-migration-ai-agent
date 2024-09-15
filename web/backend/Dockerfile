@@ -2,7 +2,7 @@
 FROM golang:1.22-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git ca-certificates
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -22,8 +22,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 # Start a new stage from scratch
 FROM alpine:latest
 
-# Install dependencies for Terraform
-RUN apk add --no-cache wget unzip
+# Install dependencies for Terraform and HTTPS
+RUN apk add --no-cache wget unzip ca-certificates
 
 # Set the working directory
 WORKDIR /root/
