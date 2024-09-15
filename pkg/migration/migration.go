@@ -160,13 +160,7 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 		return "", "", fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
 	}
 
-	prompt := fmt.Sprintf(`Generate a consolidated Terraform configuration for Qovery that includes all of the following apps:
-%s
-The configuration should be for the %s cloud provider.
-Use the following Terraform examples as reference:
-%s
-
-Output instructions:
+	prompt := fmt.Sprintf(`Output instructions:
 Provide two separate configurations
 1. A main.tf file containing the full Terraform configuration for all apps.
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
@@ -185,6 +179,12 @@ The output must look like this:
 	description = "Qovery API token"
 })
 ---
+
+Generate a consolidated Terraform configuration for Qovery that includes all of the following apps:
+%s
+The configuration should be for the %s cloud provider.
+Use the following Terraform examples as reference:
+%s
 
 Additional instructions:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
