@@ -61,6 +61,11 @@ func (c *ClaudeClient) Messages(prompt string) (string, error) {
 
 	var content string
 
+	// check that the Claude API response contains the expected content
+	if _, ok := result["content"]; !ok {
+		return "", fmt.Errorf("error: response does not contain content. Here is the full response: %v", result)
+	}
+
 	for _, m := range result["content"].([]interface{}) {
 		x := m.(map[string]interface{})
 		content += x["text"].(string)
