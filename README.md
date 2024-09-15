@@ -37,18 +37,18 @@ The migration agent uses the Heroku (or other provider) API to fetch information
 
 ```mermaid
 graph TD
-    A[Start] --> B[CLI fetches app data from Heroku API]
-    B --> C[CLI filters out sensitive data]
-    C --> D[CLI sends non-sensitive app data to Claude AI API]
+    A[Start] --> B[AI Migration Agent fetches app data from Heroku API]
+    B --> C[AI Migration Agent filters out sensitive data]
+    C --> D[AI Migration Agent sends non-sensitive app data to Claude AI API]
     D --> E[Claude AI generates Dockerfiles]
-    E --> F[CLI receives Dockerfiles]
-    F --> G[CLI sends non-sensitive app data to Claude AI API]
+    E --> F[AI Migration Agent receives Dockerfiles]
+    F --> G[AI Migration Agent sends non-sensitive app data to Claude AI API]
     G --> H[Claude AI generates Qovery Terraform files]
-    H --> I[CLI receives Terraform files]
-    I --> J[CLI reintegrates sensitive data]
+    H --> I[AI Migration Agent receives Terraform files]
+    I --> J[AI Migration Agent reintegrates sensitive data as Terraform secrets]
     J --> K[Validate Terraform manifest]
     K --> L{Is manifest valid?}
-    L -->|Yes| M[CLI generates output for user review]
+    L -->|Yes| M[AI Migration Agent generates output for user review]
     L -->|No| N[Auto-remediation process]
     N --> O[Claude AI fixes Terraform errors]
     O --> K
@@ -68,6 +68,7 @@ graph TD
     H -.-> S
     C -.-> T
     J -.-> T
+
 ```
 
 ## Security
