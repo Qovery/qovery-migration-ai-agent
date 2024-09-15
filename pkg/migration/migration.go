@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "embed"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/claude"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/heroku"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
@@ -17,8 +18,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
+//go:embed _readme.md
+var readmeContent string
+
 // Assets represents the generated assets for migration
 type Assets struct {
+	ReadmeMarkdown               string
 	TerraformMain                string
 	TerraformVariables           string
 	Dockerfiles                  []Dockerfile
@@ -103,6 +108,7 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 	}
 
 	assets := &Assets{
+		ReadmeMarkdown:               readmeContent,
 		TerraformMain:                terraformMain,
 		TerraformVariables:           terraformVariables,
 		Dockerfiles:                  dockerfiles,
@@ -472,6 +478,11 @@ func WriteAssets(outputDir string, assets *Assets) error {
 		return fmt.Errorf("error creating output directory: %w", err)
 	}
 
+	// Write README file
+	if err := writeToFile(filepath.Join(outputDir, "README.md"), assets.ReadmeMarkdown); err != nil {
+		return fmt.Errorf("error writing README.md: %w", err)
+	}
+
 	// Write Terraform main configuration
 	if err := writeToFile(filepath.Join(outputDir, "main.tf"), assets.TerraformMain); err != nil {
 		return fmt.Errorf("error writing main.tf: %w", err)
@@ -488,6 +499,11 @@ func WriteAssets(outputDir string, assets *Assets) error {
 		if err := writeToFile(filepath.Join(outputDir, filename), dockerfile.DockerfileContent); err != nil {
 			return fmt.Errorf("error writing %s: %w", filename, err)
 		}
+	}
+
+	// Write cost estimation report
+	if err := writeToFile(filepath.Join(outputDir, "cost_estimation_report.md"), assets.CostEstimationReportMarkdown); err != nil {
+		return fmt.Errorf("error writing cost_estimation_report.md: %w", err)
 	}
 
 	return nil
