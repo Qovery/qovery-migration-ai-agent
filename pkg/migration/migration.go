@@ -89,7 +89,8 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 
 	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
 
-	terraformMain, terraformVariables, err := generateTerraform(qoveryConfigs, destination, claudeClient, githubToken)
+	// TODO export loadQoveryTerraformDocMarkdown as a parameter
+	terraformMain, terraformVariables, err := generateTerraform(qoveryConfigs, destination, claudeClient, githubToken, false)
 	if err != nil {
 		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
 	}
@@ -130,7 +131,9 @@ Instructions:
 }
 
 // generateTerraform generates Terraform configurations for Qovery
-func generateTerraform(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient, githubToken string) (string, string, error) {
+func generateTerraform(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient,
+	githubToken string, loadQoveryTerraformDocMarkdown bool) (string, string, error) {
+
 	configJSON, err := json.Marshal(qoveryConfigs)
 	if err != nil {
 		return "", "", fmt.Errorf("error marshaling Qovery configs: %w", err)
@@ -158,9 +161,15 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 		return "", "", fmt.Errorf("error marshaling Terraform examples: %w", err)
 	}
 
-	qoveryTerraformDocMarkdownJSON, err := json.Marshal(qoveryTerraformDocMarkdown)
-	if err != nil {
-		return "", "", fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
+	var qoveryTerraformDocMarkdownJSON []byte
+	if loadQoveryTerraformDocMarkdown {
+		qoveryTerraformDocMarkdownJSON = []byte("")
+	} else {
+		qoveryTerraformDocMarkdownJSON, err = json.Marshal(qoveryTerraformDocMarkdown)
+
+		if err != nil {
+			return "", "", fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
+		}
 	}
 
 	prompt := fmt.Sprintf(`Output instructions:

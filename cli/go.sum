@@ -26,6 +26,8 @@ github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915135839-a29eed77a459 h
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915135839-a29eed77a459/go.mod h1:ehyxNT8VjIHTg2yiajDG0zCK+nD53UvmclysPRCBnBY=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915140600-e48f1167007f h1:dYQ+PGFMi5rPfpGCvturEVvQ1fz6NtGV+VmmUlwrVa4=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915140600-e48f1167007f/go.mod h1:ehyxNT8VjIHTg2yiajDG0zCK+nD53UvmclysPRCBnBY=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915150012-6aabd9fe7c0b h1:skIAc5cD4CMTOCKlp5TYor2PsbG7UN5XFnUqwGiiTWQ=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915150012-6aabd9fe7c0b/go.mod h1:ehyxNT8VjIHTg2yiajDG0zCK+nD53UvmclysPRCBnBY=
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
