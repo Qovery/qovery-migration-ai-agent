@@ -165,13 +165,14 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 The configuration should be for the %s cloud provider.
 Use the following Terraform examples as reference:
 %s
-Provide two separate configurations:
+
+Output instructions:
+Provide two separate configurations
 1. A main.tf file containing the full Terraform configuration for all apps.
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
-Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else.
-I need to be able to parse the response to extract the Terraform configurations.
+Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else. No introduction our final sentences.
 
-Instructions:
+Additional instructions:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
 - Export secrets or sensitive information from the main.tf file into the variables.tf with no default value.
 - If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.

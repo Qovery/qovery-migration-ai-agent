@@ -59,6 +59,8 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	githubToken := os.Getenv("GITHUB_TOKEN") // optional
+
 	// Create a progress channel
 	progressChan := make(chan migration.ProgressUpdate)
 
@@ -83,7 +85,8 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	assets, err := migration.GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, destination, progressChan)
+	assets, err := migration.GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey,
+		githubToken, destination, progressChan)
 
 	// Close the progress channel
 	close(progressChan)

@@ -13,6 +13,8 @@ import (
 func main() {
 	config := handlers.Config{
 		ClaudeAPIKey: os.Getenv("CLAUDE_API_KEY"),
+		QoveryAPIKey: os.Getenv("QOVERY_API_KEY"),
+		GitHubToken:  os.Getenv("GITHUB_TOKEN"),
 	}
 
 	r := gin.Default()
