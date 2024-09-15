@@ -172,6 +172,20 @@ Provide two separate configurations
 2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
 Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else. No introduction our final sentences.
 
+The output must look like this:
+---
+(terraform {
+		required_providers {
+			qovery = {
+			source = "qovery/qovery"
+		}
+	}
+}|||variable "qovery_access_token" {
+	type        = string
+	description = "Qovery API token"
+})
+---
+
 Additional instructions:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
 - Export secrets or sensitive information from the main.tf file into the variables.tf with no default value.

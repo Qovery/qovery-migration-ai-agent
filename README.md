@@ -21,6 +21,16 @@ The project is structured as follows:
 - [CLI](cli): Contains the command-line interface for the migration agent (can be used on your local machine)
 - [Web](web): Contains the web interface for the migration agent (can be deployed on a server)
 
+### Environment Variables
+
+The following environment variables are required to run the application:
+
+| Environment Variable | Description                              | Required           |
+|----------------------|------------------------------------------|--------------------|
+| `CLAUDE_API_KEY`     | Claude AI API key                        | Yes                |
+| `HEROKU_API_KEY`     | Heroku API key                           | Yes if you used it |
+| `GITHUB_TOKEN`       | GitHub token to avoid being rate limited | No                 |
+
 ## How it works
 
 The migration agent uses the Heroku (or other provider) API to fetch information about the application to be migrated. It then generates Terraform configurations for deploying the application on Qovery. The generated Terraform configurations include the necessary resources such as the application, environment, database, and other services.

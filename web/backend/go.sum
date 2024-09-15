@@ -4,6 +4,8 @@ github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915120017-84ea9a36ec8c h
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915120017-84ea9a36ec8c/go.mod h1:jdwL5TgbMsrvvowpDiJsXZUg1sYR67WbKRtqINMUgGQ=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915122919-29ba2bc45eeb h1:1Bgz8uC3J68fzSWqUAihcI8Us0+uVHz3O/uVTWl3i1U=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915122919-29ba2bc45eeb/go.mod h1:ehyxNT8VjIHTg2yiajDG0zCK+nD53UvmclysPRCBnBY=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915125354-4899980bc277 h1:ic8A5tknxQotn0Ip26JSxSjgiCLi+9BPzuBJBTWJejE=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240915125354-4899980bc277/go.mod h1:ehyxNT8VjIHTg2yiajDG0zCK+nD53UvmclysPRCBnBY=
 github.com/bytedance/sonic v1.11.6 h1:oUp34TzMlL+OY1OUWxHqsdkgC/Zfc85zGqw9siXjrc0=
 github.com/bytedance/sonic v1.11.6/go.mod h1:LysEHSvpvDySVdC2f87zGWf6CIKJcAvqab1ZaiQtds4=
 github.com/bytedance/sonic/loader v0.1.1 h1:c+e5Pt1k/cy5wMveRDyk2X4B9hF4g7an8N3zCYjJFNM=
