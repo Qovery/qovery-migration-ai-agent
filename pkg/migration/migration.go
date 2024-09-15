@@ -8,6 +8,7 @@ import (
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/heroku"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
 	"github.com/google/go-github/v39/github"
+	"golang.org/x/oauth2"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -35,7 +36,7 @@ type ProgressUpdate struct {
 }
 
 // GenerateMigrationAssets generates all necessary assets for migration and reports progress
-func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	claudeClient := claude.NewClaudeClient(claudeAPIKey)
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
 
@@ -83,7 +84,7 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, d
 
 	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
 
-	terraformMain, terraformVariables, err := generateTerraform(qoveryConfigs, destination, claudeClient)
+	terraformMain, terraformVariables, err := generateTerraform(qoveryConfigs, destination, claudeClient, githubToken)
 	if err != nil {
 		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
 	}
@@ -125,24 +126,24 @@ type TerraformExample struct {
 }
 
 // generateTerraform generates Terraform configurations for Qovery
-func generateTerraform(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient) (string, string, error) {
+func generateTerraform(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient, githubToken string) (string, string, error) {
 	configJSON, err := json.Marshal(qoveryConfigs)
 	if err != nil {
 		return "", "", fmt.Errorf("error marshaling Qovery configs: %w", err)
 	}
 
-	officialExamples, err := loadTerraformExamples("Qovery", "terraform-examples", "examples")
+	officialExamples, err := loadTerraformExamples("Qovery", "terraform-examples", "examples", githubToken)
 	if err != nil {
 		return "", "", fmt.Errorf("error loading Terraform examples: %w", err)
 	}
 
-	airbyteExample, err := loadTerraformExamples("evoxmusic", "qovery-airbyte", ".")
+	airbyteExample, err := loadTerraformExamples("evoxmusic", "qovery-airbyte", ".", githubToken)
 	if err != nil {
 		return "", "", fmt.Errorf("error loading Airbyte Terraform example: %w", err)
 	}
 
 	// https://github.com/Qovery/terraform-provider-qovery/tree/main/docs
-	qoveryTerraformDocMarkdown, err := loadMarkdownFiles("Qovery", "terraform-provider-qovery", "main")
+	qoveryTerraformDocMarkdown, err := loadMarkdownFiles("Qovery", "terraform-provider-qovery", "main", githubToken)
 	if err != nil {
 		return "", "", fmt.Errorf("error loading Qovery Terraform Provide markdown documentation: %w", err)
 	}
@@ -201,8 +202,21 @@ Instructions:
 	return finalMainTf, variablesTf, nil
 }
 
-func loadTerraformExamples(owner string, repo string, exampleDir string) ([]TerraformExample, error) {
-	client := github.NewClient(nil)
+// NewGitHubClient creates a new GitHub client with optional authentication
+func NewGitHubClient(token string) *github.Client {
+	ctx := context.Background()
+	if token != "" {
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: token},
+		)
+		tc := oauth2.NewClient(ctx, ts)
+		return github.NewClient(tc)
+	}
+	return github.NewClient(nil)
+}
+
+func loadTerraformExamples(owner, repo, exampleDir, token string) ([]TerraformExample, error) {
+	client := NewGitHubClient(token)
 
 	_, dirContent, _, err := client.Repositories.GetContents(context.Background(), owner, repo, exampleDir, nil)
 	if err != nil {
@@ -234,8 +248,8 @@ func loadTerraformExamples(owner string, repo string, exampleDir string) ([]Terr
 	return examples, nil
 }
 
-func loadMarkdownFiles(owner, repo, branch string) (map[string]string, error) {
-	client := github.NewClient(nil)
+func loadMarkdownFiles(owner, repo, branch, token string) (map[string]string, error) {
+	client := NewGitHubClient(token)
 	ctx := context.Background()
 
 	result := make(map[string]string)

@@ -53,6 +53,8 @@ function ReviewPage({migrationData}) {
         return (<div className="container">
                 <div className="migration-form">
                     <p className="subtitle">Generating migration files...</p>
+                    <p className="info-message">This process may take a few minutes depending on the number of services
+                        to migrate. Please do not reload the page.</p>
                     <QoveryLoader/>
                 </div>
             </div>);
