@@ -25,9 +25,9 @@ func main() {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = []string{
 		"*", // Allow all origins - temp
-		//"http://localhost:3000",
-		//"https://migrate.qovery.com",
-		//os.Getenv("FRONTEND_HOST_URL"),
+		"http://localhost:3000",
+		"https://migrate.qovery.com",
+		os.Getenv("FRONTEND_HOST_URL"),
 	}
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 	corsConfig.AllowHeaders = []string{
