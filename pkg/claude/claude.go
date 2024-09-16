@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // ClaudeClient represents a client for interacting with the Claude AI API
@@ -37,39 +38,62 @@ func (c *ClaudeClient) Messages(prompt string) (string, error) {
 		return "", fmt.Errorf("error marshaling payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
+	maxRetries := 10
+	retryDelay := 30 * time.Second
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			return "", fmt.Errorf("error creating request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", c.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+
+		resp, err := c.Client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("error sending request: %w", err)
+		}
+
+		defer resp.Body.Close()
+
+		var result map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		if err != nil {
+			return "", fmt.Errorf("error decoding response: %w", err)
+		}
+
+		// Check for rate limit or overloaded errors
+		if resp.StatusCode == 429 || resp.StatusCode == 503 {
+			if attempt < maxRetries-1 {
+				// Retry after a delay
+				fmt.Printf("claude AI API request failed with status code %d. Retrying in %v...\n", resp.StatusCode, retryDelay)
+				time.Sleep(retryDelay)
+				continue
+			}
+			return "", fmt.Errorf("max retries reached. Last error: %v", result)
+		}
+
+		// For other status codes, process the response
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("claude AI API request failed with status code %d: %v", resp.StatusCode, result)
+		}
+
+		var content string
+
+		// check that the Claude API response contains the expected content
+		if _, ok := result["content"]; !ok {
+			return "", fmt.Errorf("error: response does not contain content. Here is the full response: %v", result)
+		}
+
+		for _, m := range result["content"].([]interface{}) {
+			x := m.(map[string]interface{})
+			content += x["text"].(string)
+		}
+
+		return content, nil
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", c.APIKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request: %w", err)
-	}
-
-	defer resp.Body.Close()
-
-	var result map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		return "", fmt.Errorf("error decoding response: %w", err)
-	}
-
-	var content string
-
-	// check that the Claude API response contains the expected content
-	if _, ok := result["content"]; !ok {
-		return "", fmt.Errorf("error: response does not contain content. Here is the full response: %v", result)
-	}
-
-	for _, m := range result["content"].([]interface{}) {
-		x := m.(map[string]interface{})
-		content += x["text"].(string)
-	}
-
-	return content, nil
+	return "", fmt.Errorf("max retries reached without successful response")
 }

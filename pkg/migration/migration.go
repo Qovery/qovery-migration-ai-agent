@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "embed"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/claude"
@@ -444,6 +445,9 @@ The validation error is:
 %s
 
 Please fix the Terraform configuration to resolve these errors. Provide only the corrected Terraform code without any explanations.`, tfContent, output)
+
+			// Delay a bit before retrying
+			time.Sleep(3 * time.Second)
 
 			// Get Claude's response
 			correctedTF, err := claudeClient.Messages(prompt)
