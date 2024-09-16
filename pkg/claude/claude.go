@@ -65,7 +65,11 @@ func (c *ClaudeClient) Messages(prompt string) (string, error) {
 		}
 
 		// Check for rate limit or overloaded errors
-		if resp.StatusCode == 429 || resp.StatusCode == 503 {
+		// 429 - Rate limit exceeded
+		// 529 - Overloaded
+		// 500 - Internal server error
+		// https://docs.anthropic.com/en/api/errors
+		if resp.StatusCode == 429 || resp.StatusCode == 529 || resp.StatusCode == 500 {
 			if attempt < maxRetries-1 {
 				// Retry after a delay
 				fmt.Printf("claude AI API request failed with status code %d. Retrying in %v...\n", resp.StatusCode, retryDelay)
