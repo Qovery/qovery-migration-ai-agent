@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 )
 
 func main() {
@@ -28,7 +30,18 @@ func main() {
 		//os.Getenv("FRONTEND_HOST_URL"),
 	}
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	corsConfig.AllowHeaders = []string{
+		"Origin",
+		"Content-Length",
+		"Content-Type",
+		"Authorization",
+		"X-Requested-With",
+		"Accept",
+		"X-CSRF-Token",
+	}
+	corsConfig.ExposeHeaders = []string{"Content-Length"}
+	corsConfig.AllowCredentials = true
+	corsConfig.MaxAge = 12 * time.Hour
 	r.Use(cors.New(corsConfig))
 
 	// Routes
@@ -36,7 +49,16 @@ func main() {
 
 	// Handle preflight requests
 	r.OPTIONS("/*path", func(c *gin.Context) {
-		c.Status(http.StatusOK)
+		if c.Request.Method != "OPTIONS" {
+			c.Next()
+		} else {
+			c.Header("Access-Control-Allow-Origin", corsConfig.AllowOrigins[0])
+			c.Header("Access-Control-Allow-Methods", strings.Join(corsConfig.AllowMethods, ","))
+			c.Header("Access-Control-Allow-Headers", strings.Join(corsConfig.AllowHeaders, ","))
+			c.Header("Access-Control-Max-Age", "86400")
+			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Status(http.StatusNoContent)
+		}
 	})
 
 	// Get port from environment variable or use default
