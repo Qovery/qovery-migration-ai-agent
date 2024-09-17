@@ -118,6 +118,10 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 				pipelineID, ok := pipelineCoupling["pipeline"].(map[string]interface{})["id"].(string)
 				if ok {
 					pipeline = pipelineMap[pipelineID]
+					// Add stage information to the pipeline object
+					if stage, ok := pipelineCoupling["stage"].(string); ok {
+						pipeline["stage"] = stage
+					}
 					reviewApps, err = h.getPipelineReviewApps(pipelineID)
 					if err != nil {
 						fmt.Printf("Error fetching review apps for pipeline %s: %v\n", pipelineID, err)
