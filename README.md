@@ -2,6 +2,8 @@
 
 Qovery Migration AI Agent is an app designed to facilitate the migration of applications from various platforms to Qovery. Currently, it supports migrating Heroku applications to AWS, GCP, or Scaleway using Qovery.
 
+[![demo video](assets/video.png)](https://www.loom.com/share/0045d92738f0445aac1cd01766dbbdee)
+
 ## Why this tool?
 
 Migrating applications from one platform to another can be a time-consuming, error-prone process and super costly $$$. Qovery Migration AI Agent aims to simplify this process by automating the generation of Terraform configurations, Dockerfiles, and other necessary files for deploying applications on Qovery.

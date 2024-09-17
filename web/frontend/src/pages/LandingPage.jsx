@@ -37,6 +37,20 @@ const LandingPage = () => {
                 of Terraform configurations, Dockerfiles, and other necessary files for deploying applications on
                 Qovery.
             </p>
+
+            <div className="video-container">
+                <iframe
+                    src="https://www.loom.com/embed/0045d92738f0445aac1cd01766dbbdee"
+                    frameBorder="0"
+                    allowFullScreen
+                ></iframe>
+            </div>
+
+            <p className="demo-description">
+                Watch this quick demo to see the Qovery AI Migration Agent in action.
+                This video walkthrough demonstrates how easy it is to migrate your
+                application using our tool.
+            </p>
         </section>
 
         <section className="features">
