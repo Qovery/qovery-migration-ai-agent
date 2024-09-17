@@ -198,6 +198,8 @@ Additional instructions:
 - If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.
 - If an application to another application via the environment variables, make sure to use the "environment_variable_aliases" from the Qovery Terraform Provider resource (if available. cf doc).
 - If in the service you see an application that can be provided by a container image from the DockerHub, use the "container_image" from the Qovery Terraform Provider resource (if available. cf doc).
+- If the configuration has different pipelines/stages/environments, make sure to create different Qovery environments for each set of services/applications/databases.
+- If some services use the "review app" then turn on the preview environment for them with Qoverys's Terraform Provider.
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - Try to optimize the Terraform configuration as much as possible.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
@@ -265,7 +267,10 @@ Consider potential cost savings from:
 - Reduced need for enterprise-level features that are standard with Qovery
 - Improved developer productivity due to better tooling and flexibility
 
-Provide a comprehensive report that a decision-maker could use to determine if migration is worthwhile, considering both immediate cost impacts and long-term strategic benefits.`, mainTfContent, currentCosts)
+Provide a comprehensive report that a decision-maker could use to determine if migration is worthwhile, considering both immediate cost impacts and long-term strategic benefits.
+
+Important for the report: use as much as possible tables for the comparison and make it easy to read.
+`, mainTfContent, currentCosts)
 
 	// Get Claude's response
 	response, err := claudeClient.Messages(prompt)

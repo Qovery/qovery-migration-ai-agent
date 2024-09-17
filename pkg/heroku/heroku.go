@@ -18,23 +18,29 @@ type HerokuProvider struct {
 	Client *http.Client
 }
 
-// AppConfig represents the configuration for a Heroku app, including costs
+// AppConfig represents the configuration for a Heroku app, including costs, pipeline info, and review apps
 type AppConfig struct {
-	App     map[string]interface{}
-	Config  map[string]string
-	Addons  []map[string]interface{}
-	Domains []map[string]interface{}
-	Cost    float64
+	App           map[string]interface{}
+	Config        map[string]string
+	Addons        []map[string]interface{}
+	Domains       []map[string]interface{}
+	Cost          float64
+	Pipeline      map[string]interface{}
+	ReviewApps    []map[string]interface{}
+	ReviewAppConf map[string]interface{}
 }
 
 // Map returns a map representation of the AppConfig
 func (a AppConfig) Map() map[string]interface{} {
 	return map[string]interface{}{
-		"app":     a.App,
-		"config":  a.Config,
-		"addons":  a.Addons,
-		"domains": a.Domains,
-		"cost":    a.Cost,
+		"app":             a.App,
+		"config":          a.Config,
+		"addons":          a.Addons,
+		"domains":         a.Domains,
+		"cost":            a.Cost,
+		"pipeline":        a.Pipeline,
+		"review_apps":     a.ReviewApps,
+		"review_app_conf": a.ReviewAppConf,
 	}
 }
 
@@ -46,11 +52,22 @@ func NewHerokuProvider(apiKey string) *HerokuProvider {
 	}
 }
 
-// GetAllAppsConfig retrieves the configuration for all Heroku apps, including env vars, addons, domains, and costs
+// GetAllAppsConfig retrieves the configuration for all Heroku apps, including env vars, addons, domains, costs, pipeline info, and review apps
 func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 	apps, err := h.getApps()
 	if err != nil {
 		return nil, err
+	}
+
+	pipelines, err := h.getPipelines()
+	if err != nil {
+		return nil, err
+	}
+
+	pipelineMap := make(map[string]map[string]interface{})
+	for _, pipeline := range pipelines {
+		pipelineID, _ := pipeline["id"].(string)
+		pipelineMap[pipelineID] = pipeline
 	}
 
 	var wg sync.WaitGroup
@@ -81,12 +98,37 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 				fmt.Printf("Error fetching cost for app %s: %v\n", appName, err)
 				return
 			}
+			pipelineCoupling, err := h.getAppPipelineCoupling(appName)
+			if err != nil {
+				fmt.Printf("Error fetching pipeline coupling for app %s: %v\n", appName, err)
+				return
+			}
+
+			var pipeline map[string]interface{}
+			var reviewApps []map[string]interface{}
+			var reviewAppConf map[string]interface{}
+			if pipelineCoupling != nil {
+				pipelineID, _ := pipelineCoupling["pipeline"].(map[string]interface{})["id"].(string)
+				pipeline = pipelineMap[pipelineID]
+				reviewApps, err = h.getPipelineReviewApps(pipelineID)
+				if err != nil {
+					fmt.Printf("Error fetching review apps for pipeline %s: %v\n", pipelineID, err)
+				}
+				reviewAppConf, err = h.getPipelineReviewAppConfig(pipelineID)
+				if err != nil {
+					fmt.Printf("Error fetching review app config for pipeline %s: %v\n", pipelineID, err)
+				}
+			}
+
 			configs[i] = AppConfig{
-				App:     app,
-				Config:  config,
-				Addons:  addons,
-				Domains: domains,
-				Cost:    cost,
+				App:           app,
+				Config:        config,
+				Addons:        addons,
+				Domains:       domains,
+				Cost:          cost,
+				Pipeline:      pipeline,
+				ReviewApps:    reviewApps,
+				ReviewAppConf: reviewAppConf,
 			}
 		}(i, app)
 	}
@@ -141,6 +183,40 @@ func (h *HerokuProvider) getAppCost(appName string) (float64, error) {
 	}
 
 	return totalCost, nil
+}
+
+func (h *HerokuProvider) getPipelines() ([]map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/pipelines", herokuAPIRootURL)
+	return h.makeRequest(url)
+}
+
+func (h *HerokuProvider) getAppPipelineCoupling(appName string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/apps/%s/pipeline-couplings", herokuAPIRootURL, appName)
+	couplings, err := h.makeRequest(url)
+	if err != nil {
+		return nil, err
+	}
+	if len(couplings) > 0 {
+		return couplings[0], nil
+	}
+	return nil, nil
+}
+
+func (h *HerokuProvider) getPipelineReviewApps(pipelineID string) ([]map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/pipelines/%s/review-apps", herokuAPIRootURL, pipelineID)
+	return h.makeRequest(url)
+}
+
+func (h *HerokuProvider) getPipelineReviewAppConfig(pipelineID string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/pipelines/%s/review-app-config", herokuAPIRootURL, pipelineID)
+	configs, err := h.makeRequest(url)
+	if err != nil {
+		return nil, err
+	}
+	if len(configs) > 0 {
+		return configs[0], nil
+	}
+	return nil, nil
 }
 
 func (h *HerokuProvider) makeRequest(url string) ([]map[string]interface{}, error) {
