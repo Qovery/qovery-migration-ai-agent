@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -25,7 +26,7 @@ type AppConfig struct {
 	Addons        []map[string]interface{}
 	Domains       []map[string]interface{}
 	Cost          float64
-	Pipeline      map[string]interface{}
+	Stage         string
 	ReviewApps    []map[string]interface{}
 	ReviewAppConf map[string]interface{}
 }
@@ -38,7 +39,7 @@ func (a AppConfig) Map() map[string]interface{} {
 		"addons":          a.Addons,
 		"domains":         a.Domains,
 		"cost":            a.Cost,
-		"pipeline":        a.Pipeline,
+		"stage":           a.Stage,
 		"review_apps":     a.ReviewApps,
 		"review_app_conf": a.ReviewAppConf,
 	}
@@ -76,69 +77,74 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 		pipelineMap[pipelineID] = pipeline
 	}
 
+	var wg sync.WaitGroup
 	configs := make([]AppConfig, len(apps))
 
 	for i, app := range apps {
-		appName, _ := app["name"].(string)
-		config, err := h.getAppConfig(appName)
-		if err != nil {
-			fmt.Printf("Error fetching config for app %s: %v\n", appName, err)
-			continue
-		}
-		addons, err := h.getAppAddons(appName)
-		if err != nil {
-			fmt.Printf("Error fetching addons for app %s: %v\n", appName, err)
-			continue
-		}
-		domains, err := h.getAppDomains(appName)
-		if err != nil {
-			fmt.Printf("Error fetching domains for app %s: %v\n", appName, err)
-			continue
-		}
-		cost, err := h.getAppCost(appName)
-		if err != nil {
-			fmt.Printf("Error fetching cost for app %s: %v\n", appName, err)
-			continue
-		}
-		pipelineCoupling, err := h.getAppPipelineCoupling(appName)
-		if err != nil {
-			fmt.Printf("Error fetching pipeline coupling for app %s: %v\n", appName, err)
-			continue
-		}
+		wg.Add(1)
+		go func(i int, app map[string]interface{}) {
+			defer wg.Done()
+			appName, _ := app["name"].(string)
+			config, err := h.getAppConfig(appName)
+			if err != nil {
+				fmt.Printf("Error fetching config for app %s: %v\n", appName, err)
+				return
+			}
+			addons, err := h.getAppAddons(appName)
+			if err != nil {
+				fmt.Printf("Error fetching addons for app %s: %v\n", appName, err)
+				return
+			}
+			domains, err := h.getAppDomains(appName)
+			if err != nil {
+				fmt.Printf("Error fetching domains for app %s: %v\n", appName, err)
+				return
+			}
+			cost, err := h.getAppCost(appName)
+			if err != nil {
+				fmt.Printf("Error fetching cost for app %s: %v\n", appName, err)
+				return
+			}
+			pipelineCoupling, err := h.getAppPipelineCoupling(appName)
+			if err != nil {
+				fmt.Printf("Error fetching pipeline coupling for app %s: %v\n", appName, err)
+				return
+			}
 
-		var pipeline map[string]interface{}
-		var reviewApps []map[string]interface{}
-		var reviewAppConf map[string]interface{}
-		if pipelineCoupling != nil {
-			pipelineID, ok := pipelineCoupling["pipeline"].(map[string]interface{})["id"].(string)
-			if ok {
-				pipeline = pipelineMap[pipelineID]
-				// Add stage information to the pipeline object
-				if stage, ok := pipelineCoupling["stage"].(string); ok {
-					pipeline["stage"] = stage
-				}
-				reviewApps, err = h.getPipelineReviewApps(pipelineID)
-				if err != nil {
-					fmt.Printf("Error fetching review apps for pipeline %s: %v\n", pipelineID, err)
-				}
-				reviewAppConf, err = h.getPipelineReviewAppConfig(pipelineID)
-				if err != nil {
-					fmt.Printf("Error fetching review app config for pipeline %s: %v\n", pipelineID, err)
+			stage := ""
+			var reviewApps []map[string]interface{}
+			var reviewAppConf map[string]interface{}
+			if pipelineCoupling != nil {
+				pipelineID, ok := pipelineCoupling["pipeline"].(map[string]interface{})["id"].(string)
+				if ok {
+					if s, ok := pipelineCoupling["stage"].(string); ok {
+						stage = s
+					}
+					reviewApps, err = h.getPipelineReviewApps(pipelineID)
+					if err != nil {
+						fmt.Printf("Error fetching review apps for pipeline %s: %v\n", pipelineID, err)
+					}
+					reviewAppConf, err = h.getPipelineReviewAppConfig(pipelineID)
+					if err != nil {
+						fmt.Printf("Error fetching review app config for pipeline %s: %v\n", pipelineID, err)
+					}
 				}
 			}
-		}
 
-		configs[i] = AppConfig{
-			App:           app,
-			Config:        config,
-			Addons:        addons,
-			Domains:       domains,
-			Cost:          cost,
-			Pipeline:      pipeline,
-			ReviewApps:    reviewApps,
-			ReviewAppConf: reviewAppConf,
-		}
+			configs[i] = AppConfig{
+				App:           app,
+				Config:        config,
+				Addons:        addons,
+				Domains:       domains,
+				Cost:          cost,
+				Stage:         stage,
+				ReviewApps:    reviewApps,
+				ReviewAppConf: reviewAppConf,
+			}
+		}(i, app)
 	}
+
+	wg.Wait()
 
 	return configs, nil
 }
