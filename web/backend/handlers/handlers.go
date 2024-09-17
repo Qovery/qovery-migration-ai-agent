@@ -2,21 +2,27 @@ package handlers
 
 import (
 	"archive/zip"
+	"backend/services"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/migration"
 	"github.com/gin-gonic/gin"
 )
 
 type Config struct {
-	ClaudeAPIKey string
-	QoveryAPIKey string
-	GitHubToken  string
+	ClaudeAPIKey      string
+	QoveryAPIKey      string
+	GitHubToken       string
+	S3Bucket          string
+	S3Region          string
+	S3AccessKey       string
+	S3SecretAccessKey string
 }
 
 type HerokuMigrationRequest struct {
@@ -72,17 +78,26 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 		}
 
 		// Create a zip file
-		zipPath := filepath.Join(tempDir, "heroku-migration.zip")
+		zipName := fmt.Sprintf("heroku-migration-%s.zip", time.Now().Format("20060102-150405"))
+		zipPath := filepath.Join(tempDir, zipName)
 		err = createZip(tempDir, zipPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create zip file"})
 			return
 		}
 
+		if config.S3Bucket != "" && config.S3Region != "" && config.S3AccessKey != "" && config.S3SecretAccessKey != "" {
+			// Upload the zip file to S3
+			_, err := services.UploadZipToS3(zipPath, config.S3Bucket, config.S3Region, config.S3AccessKey, config.S3SecretAccessKey)
+			if err != nil {
+				_ = fmt.Errorf("failed to upload zip to S3: %v", err)
+			}
+		}
+
 		// Set the appropriate headers for file download
 		c.Header("Content-Description", "File Transfer")
 		c.Header("Content-Transfer-Encoding", "binary")
-		c.Header("Content-Disposition", "attachment; filename=heroku-migration.zip")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", zipName))
 		c.Header("Content-Type", "application/zip")
 
 		// Send the file
