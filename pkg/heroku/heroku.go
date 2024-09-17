@@ -3,6 +3,7 @@ package heroku
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -42,6 +43,12 @@ func (a AppConfig) Map() map[string]interface{} {
 		"review_apps":     a.ReviewApps,
 		"review_app_conf": a.ReviewAppConf,
 	}
+}
+
+// HerokuError represents an error returned by the Heroku API
+type HerokuError struct {
+	ID      string `json:"id"`
+	Message string `json:"message"`
 }
 
 // NewHerokuProvider creates a new HerokuProvider with the given API key
@@ -108,15 +115,17 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 			var reviewApps []map[string]interface{}
 			var reviewAppConf map[string]interface{}
 			if pipelineCoupling != nil {
-				pipelineID, _ := pipelineCoupling["pipeline"].(map[string]interface{})["id"].(string)
-				pipeline = pipelineMap[pipelineID]
-				reviewApps, err = h.getPipelineReviewApps(pipelineID)
-				if err != nil {
-					fmt.Printf("Error fetching review apps for pipeline %s: %v\n", pipelineID, err)
-				}
-				reviewAppConf, err = h.getPipelineReviewAppConfig(pipelineID)
-				if err != nil {
-					fmt.Printf("Error fetching review app config for pipeline %s: %v\n", pipelineID, err)
+				pipelineID, ok := pipelineCoupling["pipeline"].(map[string]interface{})["id"].(string)
+				if ok {
+					pipeline = pipelineMap[pipelineID]
+					reviewApps, err = h.getPipelineReviewApps(pipelineID)
+					if err != nil {
+						fmt.Printf("Error fetching review apps for pipeline %s: %v\n", pipelineID, err)
+					}
+					reviewAppConf, err = h.getPipelineReviewAppConfig(pipelineID)
+					if err != nil {
+						fmt.Printf("Error fetching review app config for pipeline %s: %v\n", pipelineID, err)
+					}
 				}
 			}
 
@@ -192,14 +201,14 @@ func (h *HerokuProvider) getPipelines() ([]map[string]interface{}, error) {
 
 func (h *HerokuProvider) getAppPipelineCoupling(appName string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/apps/%s/pipeline-couplings", herokuAPIRootURL, appName)
-	couplings, err := h.makeRequest(url)
+	results, err := h.makeRequest(url)
 	if err != nil {
 		return nil, err
 	}
-	if len(couplings) > 0 {
-		return couplings[0], nil
+	if len(results) == 0 {
+		return nil, nil // App is not coupled to a pipeline
 	}
-	return nil, nil
+	return results[0], nil
 }
 
 func (h *HerokuProvider) getPipelineReviewApps(pipelineID string) ([]map[string]interface{}, error) {
@@ -209,14 +218,14 @@ func (h *HerokuProvider) getPipelineReviewApps(pipelineID string) ([]map[string]
 
 func (h *HerokuProvider) getPipelineReviewAppConfig(pipelineID string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/pipelines/%s/review-app-config", herokuAPIRootURL, pipelineID)
-	configs, err := h.makeRequest(url)
+	results, err := h.makeRequest(url)
 	if err != nil {
 		return nil, err
 	}
-	if len(configs) > 0 {
-		return configs[0], nil
+	if len(results) == 0 {
+		return nil, nil
 	}
-	return nil, nil
+	return results[0], nil
 }
 
 func (h *HerokuProvider) makeRequest(url string) ([]map[string]interface{}, error) {
@@ -234,14 +243,29 @@ func (h *HerokuProvider) makeRequest(url string) ([]map[string]interface{}, erro
 	}
 	defer resp.Body.Close()
 
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		var herokuErr HerokuError
+		if err := json.Unmarshal(body, &herokuErr); err == nil && herokuErr.ID == "not_found" {
+			return []map[string]interface{}{}, nil // Return empty list for "not found" cases
+		}
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var result []map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding response: %w", err)
+		// If unmarshaling to slice fails, try unmarshaling to single object
+		var singleResult map[string]interface{}
+		if err := json.Unmarshal(body, &singleResult); err == nil {
+			result = []map[string]interface{}{singleResult}
+		} else {
+			return nil, fmt.Errorf("error decoding response: %w", err)
+		}
 	}
 
 	return result, nil
@@ -262,12 +286,21 @@ func (h *HerokuProvider) makeRequestConfig(url string) (map[string]string, error
 	}
 	defer resp.Body.Close()
 
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		var herokuErr HerokuError
+		if err := json.Unmarshal(body, &herokuErr); err == nil && herokuErr.ID == "not_found" {
+			return map[string]string{}, nil // Return empty map for "not found" cases
+		}
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var result map[string]string
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}
