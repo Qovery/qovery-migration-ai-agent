@@ -7,6 +7,7 @@ import ReviewPage from './pages/ReviewPage';
 import NextStepsPage from './pages/NextStepsPage';
 import SecurityPage from './pages/SecurityPage';
 import Footer from "./components/Footer";
+import ScriptInjector from "./components/ScriptInjector";
 
 function App() {
     const [migrationData, setMigrationData] = useState({
@@ -15,6 +16,7 @@ function App() {
 
     return (<Router>
         <div className="App">
+            <ScriptInjector/>
             <header className="site-header">
                 <div className="container">
                     <div className="header-content">
