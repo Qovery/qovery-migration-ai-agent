@@ -1,5 +1,7 @@
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240917154113-b79c813fb5fc h1:EQRRdktQim51jQxfQR1YbHvGn5q51/RdZYQ7Lk0dXkE=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240917154113-b79c813fb5fc/go.mod h1:ehyxNT8VjIHTg2yiajDG0zCK+nD53UvmclysPRCBnBY=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240919074621-b0872a593527 h1:Fyr+8QWl9OiP/01psk/RkC9r9laEeiMij3Sc4A0Wfqc=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20240919074621-b0872a593527/go.mod h1:ehyxNT8VjIHTg2yiajDG0zCK+nD53UvmclysPRCBnBY=
 github.com/aws/aws-sdk-go v1.55.5 h1:KKUZBfBoyqy5d3swXyiC7Q76ic40rYcbqH7qjh59kzU=
 github.com/aws/aws-sdk-go v1.55.5/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
 github.com/bytedance/sonic v1.11.6 h1:oUp34TzMlL+OY1OUWxHqsdkgC/Zfc85zGqw9siXjrc0=

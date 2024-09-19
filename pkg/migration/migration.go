@@ -500,7 +500,7 @@ Please fix the Terraform configuration to resolve these errors. Provide only the
 }
 
 // WriteAssets writes the generated assets to the output directory
-func WriteAssets(outputDir string, assets *Assets) error {
+func WriteAssets(outputDir string, assets *Assets, writePrompts bool) error {
 	// Create the output directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("error creating output directory: %w", err)
@@ -532,6 +532,18 @@ func WriteAssets(outputDir string, assets *Assets) error {
 	// Write cost estimation report
 	if err := writeToFile(filepath.Join(outputDir, "cost_estimation_report.md"), assets.CostEstimationReportMarkdown); err != nil {
 		return fmt.Errorf("error writing cost_estimation_report.md: %w", err)
+	}
+
+	if writePrompts {
+		// Write prompts into JSON file
+		promptsJSON, err := json.Marshal(assets.Prompts)
+		if err != nil {
+			return fmt.Errorf("error marshaling prompts: %w", err)
+		}
+
+		if err := writeToFile(filepath.Join(outputDir, "prompts.json"), string(promptsJSON)); err != nil {
+			return fmt.Errorf("error writing prompts.json: %w", err)
+		}
 	}
 
 	return nil
