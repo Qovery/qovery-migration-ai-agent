@@ -50,13 +50,12 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create temporary directory"})
 			return
 		}
-		defer os.RemoveAll(tempDir) // Clean up the temporary directory when we're done
+		defer os.RemoveAll(tempDir)
 
 		progressChan := make(chan migration.ProgressUpdate)
 		go func() {
 			for update := range progressChan {
 				// You can use this to send real-time updates to the client
-				// For example, you could use WebSockets or Server-Sent Events
 				_ = update // Placeholder to avoid unused variable error
 			}
 		}()
@@ -66,6 +65,26 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 			config.QoveryAPIKey, config.GitHubToken, req.Destination, progressChan)
 
 		if err != nil {
+			// Error occurred, let's zip the assets and upload to S3
+			errorZipName := fmt.Sprintf("error-heroku-migration-%s.zip", time.Now().Format("20060102-150405"))
+			errorZipPath := filepath.Join(tempDir, errorZipName)
+
+			// Write the assets to the temporary directory
+			if writeErr := migration.WriteAssets(tempDir, assets); writeErr == nil {
+				// Create a zip file
+				if zipErr := createZip(tempDir, errorZipPath); zipErr == nil {
+					// Upload the error zip file to S3
+					if config.S3Bucket != "" && config.S3Region != "" && config.S3AccessKey != "" && config.S3SecretAccessKey != "" {
+						_, uploadErr := services.UploadZipToS3(errorZipPath, config.S3Bucket, config.S3Region, config.S3AccessKey, config.S3SecretAccessKey)
+						if uploadErr != nil {
+							fmt.Printf("Failed to upload error zip to S3: %v\n", uploadErr)
+						} else {
+							fmt.Printf("Error zip uploaded to S3: %s\n", errorZipPath)
+						}
+					}
+				}
+			}
+
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -90,7 +109,9 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 			// Upload the zip file to S3
 			_, err := services.UploadZipToS3(zipPath, config.S3Bucket, config.S3Region, config.S3AccessKey, config.S3SecretAccessKey)
 			if err != nil {
-				_ = fmt.Errorf("failed to upload zip to S3: %v", err)
+				fmt.Printf("Failed to upload zip to S3: %v\n", err)
+			} else {
+				fmt.Printf("Zip uploaded to S3: %s\n", zipPath)
 			}
 		}
 
