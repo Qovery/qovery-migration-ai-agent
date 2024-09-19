@@ -70,7 +70,7 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 			errorZipPath := filepath.Join(tempDir, errorZipName)
 
 			// Write the assets to the temporary directory
-			if writeErr := migration.WriteAssets(tempDir, assets); writeErr == nil {
+			if writeErr := migration.WriteAssets(tempDir, assets, true); writeErr == nil {
 				// Create a zip file
 				if zipErr := createZip(tempDir, errorZipPath); zipErr == nil {
 					// Upload the error zip file to S3
@@ -90,7 +90,7 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 		}
 
 		// Write the generated assets to the temporary directory
-		err = migration.WriteAssets(tempDir, assets)
+		err = migration.WriteAssets(tempDir, assets, false)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
