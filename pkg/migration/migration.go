@@ -22,6 +22,13 @@ import (
 //go:embed _readme.md
 var readmeContent string
 
+type AssetsPrompt struct {
+	Type   string
+	Name   string
+	Prompt string
+	Result string
+}
+
 // Assets represents the generated assets for migration
 type Assets struct {
 	ReadmeMarkdown               string
@@ -29,6 +36,7 @@ type Assets struct {
 	TerraformVariables           string
 	Dockerfiles                  []Dockerfile
 	CostEstimationReportMarkdown string
+	Prompts                      []AssetsPrompt
 }
 
 // Dockerfile represents a generated Dockerfile for an app
@@ -69,6 +77,7 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 
 	var qoveryConfigs = make(map[string]interface{})
 	var dockerfiles []Dockerfile
+	var prompts []AssetsPrompt
 
 	var currentCost = 0.0
 
@@ -79,7 +88,9 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 		qoveryConfigs[appName] = qoveryConfig
 		currentCost += app.Cost
 
-		dockerfile, err := generateDockerfile(app.App, claudeClient)
+		dockerfile, dockerfileGenPrompt, err := generateDockerfile(app.App, claudeClient)
+		prompts = append(prompts, AssetsPrompt{Type: "DockerfileGen", Name: appName, Prompt: dockerfileGenPrompt, Result: dockerfile})
+
 		if err != nil {
 			return nil, fmt.Errorf("error generating Dockerfile for %s: %w", appName, err)
 		}
@@ -96,14 +107,19 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
 
 	// TODO export loadQoveryTerraformDocMarkdown as a parameter
-	terraformMain, terraformVariables, err := generateTerraform(qoveryConfigs, destination, claudeClient, githubToken, false)
+	terraformMain, terraformVariables, terraformGenPrompt, err := generateTerraform(qoveryConfigs, destination, claudeClient, githubToken, false)
+	prompts = append(prompts, AssetsPrompt{Type: "TerraformGen", Name: "main.tf", Prompt: terraformGenPrompt, Result: terraformMain})
+	prompts = append(prompts, AssetsPrompt{Type: "TerraformGen", Name: "variables.tf", Prompt: terraformGenPrompt, Result: terraformVariables})
+
 	if err != nil {
 		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Estimating costs", Progress: 0.9}
 
-	costEstimation, err := EstimateWorkloadCosts(terraformMain, currentCost, claudeClient)
+	costEstimation, costEstimationPrompt, err := EstimateWorkloadCosts(terraformMain, currentCost, claudeClient)
+	prompts = append(prompts, AssetsPrompt{Type: "CostEstimation", Name: "cost_estimation_report.md", Prompt: costEstimationPrompt, Result: costEstimation})
+
 	if err != nil {
 		return nil, fmt.Errorf("error estimating workload costs: %w", err)
 	}
@@ -114,6 +130,7 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 		TerraformVariables:           terraformVariables,
 		Dockerfiles:                  dockerfiles,
 		CostEstimationReportMarkdown: costEstimation,
+		Prompts:                      prompts,
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Completed", Progress: 1.0}
@@ -122,10 +139,10 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 }
 
 // generateDockerfile generates a Dockerfile for a given app configuration
-func generateDockerfile(appConfig map[string]interface{}, claudeClient *claude.ClaudeClient) (string, error) {
+func generateDockerfile(appConfig map[string]interface{}, claudeClient *claude.ClaudeClient) (string, string, error) {
 	configJSON, err := json.Marshal(appConfig)
 	if err != nil {
-		return "", fmt.Errorf("error marshaling app config: %w", err)
+		return "", "", fmt.Errorf("error marshaling app config: %w", err)
 	}
 
 	prompt := fmt.Sprintf(`Generate a Dockerfile for the following app configuration:\n%s\n\n
@@ -134,38 +151,40 @@ Instructions:
 - The Dockerfile should be optimized for the best performance and security.
 - Generate just the Dockerfile content and nothing else.
 `, string(configJSON))
-	return claudeClient.Messages(prompt)
+
+	result, err := claudeClient.Messages(prompt)
+	return result, prompt, err
 }
 
 // generateTerraform generates Terraform configurations for Qovery
 func generateTerraform(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient,
-	githubToken string, loadQoveryTerraformDocMarkdown bool) (string, string, error) {
+	githubToken string, loadQoveryTerraformDocMarkdown bool) (string, string, string, error) {
 
 	configJSON, err := json.Marshal(qoveryConfigs)
 	if err != nil {
-		return "", "", fmt.Errorf("error marshaling Qovery configs: %w", err)
+		return "", "", "", fmt.Errorf("error marshaling Qovery configs: %w", err)
 	}
 
 	officialExamples, err := loadTerraformExamples("Qovery", "terraform-examples", "examples", githubToken)
 	if err != nil {
-		return "", "", fmt.Errorf("error loading Terraform examples: %w", err)
+		return "", "", "", fmt.Errorf("error loading Terraform examples: %w", err)
 	}
 
 	airbyteExample, err := loadTerraformExamples("evoxmusic", "qovery-airbyte", ".", githubToken)
 	if err != nil {
-		return "", "", fmt.Errorf("error loading Airbyte Terraform example: %w", err)
+		return "", "", "", fmt.Errorf("error loading Airbyte Terraform example: %w", err)
 	}
 
 	qoveryTerraformDocMarkdown, err := loadMarkdownFiles("Qovery", "terraform-provider-qovery", "main", githubToken)
 	if err != nil {
-		return "", "", fmt.Errorf("error loading Qovery Terraform Provider markdown documentation: %w", err)
+		return "", "", "", fmt.Errorf("error loading Qovery Terraform Provider markdown documentation: %w", err)
 	}
 
 	examples := append(officialExamples, airbyteExample...)
 
 	examplesJSON, err := json.Marshal(examples)
 	if err != nil {
-		return "", "", fmt.Errorf("error marshaling Terraform examples: %w", err)
+		return "", "", "", fmt.Errorf("error marshaling Terraform examples: %w", err)
 	}
 
 	var qoveryTerraformDocMarkdownJSON []byte
@@ -175,7 +194,7 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 		qoveryTerraformDocMarkdownJSON, err = json.Marshal(qoveryTerraformDocMarkdown)
 
 		if err != nil {
-			return "", "", fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
+			return "", "", "", fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
 		}
 	}
 
@@ -207,26 +226,26 @@ Additional instructions:
 
 	response, err := claudeClient.Messages(prompt)
 	if err != nil {
-		return "", "", fmt.Errorf("error generating Terraform configs: %w", err)
+		return "", "", prompt, fmt.Errorf("error generating Terraform configs: %w", err)
 	}
 
 	mainTf, variablesTf, err := parseTerraformResponse(response)
 
 	if err != nil {
-		return "", "", err
+		return "", "", prompt, err
 	}
 
 	// Validate the Terraform configuration
 	finalMainTf, err := validateTerraform(mainTf, variablesTf, claudeClient)
 	if err != nil {
-		return "", "", fmt.Errorf("error validating Terraform configuration: %w", err)
+		return "", "", prompt, fmt.Errorf("error validating Terraform configuration: %w", err)
 	}
 
-	return finalMainTf, variablesTf, nil
+	return finalMainTf, variablesTf, prompt, nil
 }
 
 // EstimateWorkloadCosts estimates the costs of running the workload and provides a comparison report
-func EstimateWorkloadCosts(mainTfContent string, currentCosts float64, claudeClient *claude.ClaudeClient) (string, error) {
+func EstimateWorkloadCosts(mainTfContent string, currentCosts float64, claudeClient *claude.ClaudeClient) (string, string, error) {
 	// Prepare the prompt for Claude
 	prompt := fmt.Sprintf(`Given the following Terraform configuration for Qovery:
 
@@ -275,13 +294,13 @@ Important for the report: use as much as possible tables for the comparison and 
 	// Get Claude's response
 	response, err := claudeClient.Messages(prompt)
 	if err != nil {
-		return "", fmt.Errorf("error getting response from Claude: %w", err)
+		return "", prompt, fmt.Errorf("error getting response from Claude: %w", err)
 	}
 
 	// Append contact information
 	response += "\n\nFor more information or if you have any questions about migrating from Heroku to Qovery, please contact us at hello@qovery.com."
 
-	return response, nil
+	return response, prompt, nil
 }
 
 // NewGitHubClient creates a new GitHub client with optional authentication
