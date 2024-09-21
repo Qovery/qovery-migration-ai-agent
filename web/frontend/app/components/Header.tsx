@@ -9,7 +9,7 @@ export default function Header() {
         <header className="px-4 lg:px-6 h-16 flex items-center">
             <Link className="flex items-center justify-center" href="/">
                 <QoveryLogo width={32} height={32} className="mr-2"/>
-                <span className="font-bold text-xl text-white">Qovery AI Migration</span>
+                <span className="font-bold text-xl text-white">Qovery AI Cloud Migration</span>
             </Link>
             <nav className="ml-auto flex gap-6">
                 <Link className="text-sm font-medium hover:text-purple-400 transition-colors" href="https://discuss.qovery.com">

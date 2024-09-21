@@ -68,24 +68,37 @@ export default function GetStartedFlow() {
     const [migrationProgress, setMigrationProgress] = useState(0)
     const [currentMigrationStep, setCurrentMigrationStep] = useState(0)
 
+    const ArrowDown = () => (
+        <svg className="w-8 h-8 mx-auto my-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 4v16m0 0l-6-6m6 6l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                  strokeLinejoin="round"/>
+        </svg>
+    );
+
     useEffect(() => {
-        let interval
+        let interval: ReturnType<typeof setInterval> | undefined;
         if (isLoading && currentMigrationStep < migrationSteps.length) {
             interval = setInterval(() => {
                 setCurrentMigrationStep(prev => {
                     if (prev < migrationSteps.length - 1) {
                         return prev + 1
                     }
-                    clearInterval(interval)
+                    if (interval !== undefined) {
+                        clearInterval(interval)
+                    }
                     return prev
                 })
                 setMigrationProgress(prev => Math.min(prev + 100 / migrationSteps.length, 100))
             }, 15000) // Change step every 15 seconds -- this is a heuristic value
         }
-        return () => clearInterval(interval)
+        return () => {
+            if (interval !== undefined) {
+                clearInterval(interval)
+            }
+        }
     }, [isLoading, currentMigrationStep])
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         if (step === 1) {
             setStep(2)
@@ -99,12 +112,12 @@ export default function GetStartedFlow() {
                     herokuApiKey,
                 })
                 setDownloadUrl(result.downloadUrl)
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Migration failed:", error)
                 let errorMessage = "An unexpected error occurred. Please try again."
-                if (error.response && error.response.data) {
+                if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'data' in error.response) {
                     try {
-                        const errorData = JSON.parse(error.response.data)
+                        const errorData = JSON.parse(error.response.data as string)
                         errorMessage = errorData.error || errorMessage
                     } catch (jsonError) {
                         console.error("Error parsing JSON:", jsonError)
@@ -128,7 +141,7 @@ export default function GetStartedFlow() {
 
     return (
         <div className="max-w-md mx-auto p-6 bg-white rounded-lg">
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">Get Started with Qovery Migration</h2>
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">Get Started with Qovery AI Cloud Migration</h2>
 
             {error && (
                 <Alert variant="destructive" className="mb-4">
@@ -159,6 +172,9 @@ export default function GetStartedFlow() {
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        <ArrowDown/>
+
                         <div>
                             <label className="block mb-2 text-sm font-medium text-gray-700">Select Target Cloud
                                 Platform</label>

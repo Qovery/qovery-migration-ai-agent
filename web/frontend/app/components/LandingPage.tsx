@@ -1,6 +1,7 @@
 import {Button} from "@/app/components/ui/button"
 import {ArrowRight, Bot, Cloud, Github, Shield, Zap} from "lucide-react"
 import Link from "next/link"
+import VideoSection from "@/app/components/VideoSection";
 
 export default function LandingPage() {
     return (
@@ -10,13 +11,14 @@ export default function LandingPage() {
                     <div className="container mx-auto text-center">
                         <div className="inline-block bg-violet-800 bg-opacity-50 rounded-full px-4 py-2 mb-6">
                             <span
-                                className="text-sm font-medium">Qovery AI Migration Agent - Simplify Your Migration</span>
+                                className="text-sm font-medium">Qovery AI Cloud Migration Agent - Simplify Your Migration</span>
                         </div>
                         <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl mb-6">
                             AI-Powered Cloud Migration
                         </h1>
                         <p className="mx-auto max-w-[700px] text-gray-300 text-lg md:text-xl mb-8">
-                            Qovery AI Migration Agent eliminates your cloud migration headaches. Migrate and maintain a secure
+                            Qovery AI Cloud Migration Agent eliminates your cloud migration headaches. Migrate and
+                            maintain a secure
                             and compliant cloud infrastructure in hours - not months!
                         </p>
                         <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -40,22 +42,7 @@ export default function LandingPage() {
                     </div>
                 </section>
 
-                <section className="w-full pb-12 md:pb-12 lg:pb-24 px-4">
-                    <div className="container mx-auto">
-                        <div className="relative aspect-video rounded-lg overflow-hidden shadow-2xl">
-                            <div style={{position: 'relative', paddingBottom: '56.25%', height: 0}}>
-                                <iframe
-                                    src="https://www.loom.com/embed/0045d92738f0445aac1cd01766dbbdee"
-                                    frameBorder="0"
-                                    webkitallowfullscreen="true"
-                                    mozallowfullscreen="true"
-                                    allowFullScreen={true}
-                                    style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}
-                                ></iframe>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+                <VideoSection/>
 
                 <section className="w-full py-12 md:py-24 lg:py-32 px-4 bg-gray-900">
                     <div className="container mx-auto">
@@ -76,7 +63,8 @@ export default function LandingPage() {
                                 <div className="bg-violet-600 rounded-full p-6 mb-4">
                                     <Bot className="h-16 w-16 text-white"/>
                                 </div>
-                                <h3 className="text-2xl font-semibold mb-2 text-center">Qovery AI Migration Agent</h3>
+                                <h3 className="text-2xl font-semibold mb-2 text-center">Qovery AI Cloud Migration
+                                    Agent</h3>
                                 <p className="text-center text-gray-300 mb-4">
                                     Automates migration by generating Terraform files and leveraging Qovery's platform
                                 </p>
@@ -193,7 +181,7 @@ export default function LandingPage() {
                             Ready to Migrate in 5 Minutes?
                         </h2>
                         <p className="mx-auto max-w-[600px] text-gray-300 text-lg mb-8">
-                            Start your journey to seamless application migration with Qovery AI Migration Agent.
+                            Start your journey to seamless application migration with Qovery AI Cloud Migration Agent.
                         </p>
                         <Link href="/get-started" passHref>
                             <Button

@@ -21,7 +21,7 @@ RUN rm -rf ./*
 
 # Copy static assets from builder stage
 COPY --from=builder /app/.next/static ./_next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/images ./images
 
 # Copy nginx.conf
 COPY nginx.conf /etc/nginx/nginx.conf

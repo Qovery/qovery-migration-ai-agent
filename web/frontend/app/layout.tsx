@@ -14,8 +14,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-    title: "Qovery AI Migration Agent",
-    description: "Simplify your cloud migration with Qovery AI Migration Agent",
+    title: "Qovery AI Cloud Migration Agent",
+    description: "Simplify your cloud migration with Qovery AI Cloud Migration Agent",
 };
 
 export default function RootLayout({
