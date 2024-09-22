@@ -1,9 +1,9 @@
-import {useEffect, useState} from "react"
+import React, {useEffect, useState} from "react"
 import {Button} from "@/app/components/ui/button"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/app/components/ui/select"
 import {Input} from "@/app/components/ui/input"
 import {Alert, AlertDescription, AlertTitle} from "@/app/components/ui/alert"
-import {HelpCircle, Loader2} from "lucide-react"
+import {HelpCircle, CheckCircle2, Loader2} from "lucide-react"
 import {generateMigrationFiles} from "@/app/lib/api"
 import Link from 'next/link'
 import {
@@ -23,26 +23,26 @@ import {FaAws} from "react-icons/fa";
 import {VscAzure} from "react-icons/vsc";
 
 const paasOptions = [
-    {value: "heroku", label: "Heroku", icon: <SiHeroku size={24}></SiHeroku>},
-    {value: "render", label: "Render (coming soon)", disabled: true, icon: <SiRender size={24}></SiRender>},
-    {value: "railway", label: "Railway (coming soon)", disabled: true, icon: <SiRailway size={24}></SiRailway>},
-    {value: "fly", label: "Fly (coming soon)", disabled: true, icon: <SiFlyway size={24}></SiFlyway>},
-    {value: "vercel", label: "Vercel (coming soon)", disabled: true, icon: <SiVercel size={24}></SiVercel>},
-    {value: "netlify", label: "Netlify (coming soon)", disabled: true, icon: <SiNetlify size={24}></SiNetlify>},
+    {value: "heroku", label: "Heroku", icon: <SiHeroku size={24}/>},
+    {value: "render", label: "Render (coming soon)", disabled: true, icon: <SiRender size={24}/>},
+    {value: "railway", label: "Railway (coming soon)", disabled: true, icon: <SiRailway size={24}/>},
+    {value: "fly", label: "Fly (coming soon)", disabled: true, icon: <SiFlyway size={24}/>},
+    {value: "vercel", label: "Vercel (coming soon)", disabled: true, icon: <SiVercel size={24}/>},
+    {value: "netlify", label: "Netlify (coming soon)", disabled: true, icon: <SiNetlify size={24}/>},
     {
         value: "platformsh",
         label: "Platform.sh (coming soon)",
         disabled: true,
-        icon: <SiPlatformdotsh size={24}></SiPlatformdotsh>
+        icon: <SiPlatformdotsh size={24}/>
     },
 ]
 
 const cloudOptions = [
-    {value: "aws", label: "AWS", icon: <FaAws size={24}></FaAws>},
-    {value: "gcp", label: "GCP", icon: <SiGooglecloud size={24}></SiGooglecloud>},
-    {value: "azure", label: "Azure", icon: <VscAzure size={24}></VscAzure>},
-    {value: "scaleway", label: "Scaleway", icon: <SiScaleway size={24}></SiScaleway>},
-    {value: "kubernetes", label: "Kubernetes", icon: <SiKubernetes size={24}></SiKubernetes>},
+    {value: "aws", label: "AWS", icon: <FaAws size={24}/>},
+    {value: "gcp", label: "GCP", icon: <SiGooglecloud size={24}/>},
+    {value: "azure", label: "Azure", icon: <VscAzure size={24}/>},
+    {value: "scaleway", label: "Scaleway", icon: <SiScaleway size={24}/>},
+    {value: "kubernetes", label: "Kubernetes", icon: <SiKubernetes size={24}/>},
 ]
 
 const migrationSteps = [
@@ -67,7 +67,6 @@ export default function GetStartedFlow() {
     const [successMessage, setSuccessMessage] = useState("")
     const [migrationProgress, setMigrationProgress] = useState(0)
     const [currentMigrationStep, setCurrentMigrationStep] = useState(0)
-    const [showFinalInfo, setShowFinalInfo] = useState(false)
 
     const ArrowDown = () => (
         <svg className="w-8 h-8 mx-auto my-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -109,39 +108,51 @@ export default function GetStartedFlow() {
             setIsLoading(true)
             setError("")
             setSuccessMessage("")
-            try {
-                const result = await generateMigrationFiles({
-                    source: selectedPaas,
-                    destination: selectedCloud,
-                    herokuApiKey,
-                })
 
-                // Stop the migration progress animation
-                setIsLoading(false)
-                setMigrationProgress(100)
-                setCurrentMigrationStep(migrationSteps.length - 1)
+            if (herokuApiKey === "test") {
+                // Special case for the "test" API key
+                setTimeout(() => {
+                    setIsLoading(false)
+                    setMigrationProgress(100)
+                    setCurrentMigrationStep(migrationSteps.length - 1)
+                    setSuccessMessage("Migration files generated successfully (Test Mode)")
+                    setStep(3) // Move to the final step
+                }, 2000) // Simulate a 2-second process for test mode
+            } else {
+                try {
+                    const result = await generateMigrationFiles({
+                        source: selectedPaas,
+                        destination: selectedCloud,
+                        herokuApiKey,
+                    })
 
-                // Create a download link
-                const url = URL.createObjectURL(result.blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = result.filename
-                document.body.appendChild(a)
-                a.click()
-                document.body.removeChild(a)
-                URL.revokeObjectURL(url)
+                    // Stop the migration progress animation
+                    setIsLoading(false)
+                    setMigrationProgress(100)
+                    setCurrentMigrationStep(migrationSteps.length - 1)
 
-                setSuccessMessage(`Download started for ${result.filename}`)
-                setShowFinalInfo(true)
-            } catch (error: unknown) {
-                console.error("Migration failed:", error)
-                let errorMessage = "An unexpected error occurred. Please try again."
-                if (error instanceof Error) {
-                    errorMessage = error.message
+                    // Create a download link
+                    const url = URL.createObjectURL(result.blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = result.filename
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+
+                    setSuccessMessage(`Download started for ${result.filename}`)
+                    setStep(3) // Move to the final step
+                } catch (error: unknown) {
+                    console.error("Migration failed:", error)
+                    let errorMessage = "An unexpected error occurred. Please try again."
+                    if (error instanceof Error) {
+                        errorMessage = error.message
+                    }
+                    setError(errorMessage)
+                } finally {
+                    setIsLoading(false)
                 }
-                setError(errorMessage)
-            } finally {
-                setIsLoading(false)
             }
         }
     }
@@ -150,8 +161,11 @@ export default function GetStartedFlow() {
         if (step > 1) {
             setStep(step - 1)
             setError("")
-            setShowFinalInfo(false)
         }
+    }
+
+    const handleRestart = () => {
+        window.location.reload()
     }
 
     return (
@@ -166,7 +180,7 @@ export default function GetStartedFlow() {
             )}
 
             {successMessage && (
-                <Alert variant="default" className="mb-4">
+                <Alert variant="default" className="mb-4 bg-violet-700 text-white">
                     <AlertTitle>Success</AlertTitle>
                     <AlertDescription>{successMessage}</AlertDescription>
                 </Alert>
@@ -263,7 +277,7 @@ export default function GetStartedFlow() {
                                 .
                             </AlertDescription>
                         </Alert>
-                        {!isLoading && !showFinalInfo && (
+                        {!isLoading && (
                             <p className="mt-4 text-sm text-gray-600">
                                 After clicking "Next", the generation of the migration files process will begin. This
                                 can take up to 5 minutes to complete.
@@ -278,27 +292,40 @@ export default function GetStartedFlow() {
                                 </p>
                             </div>
                         )}
-                        {showFinalInfo && (
-                            <div className="mt-4">
-                                <h3 className="text-lg font-semibold mb-2 text-gray-800">Migration Files Ready</h3>
-                                <p className="text-sm text-gray-600 mb-2">
-                                    Your migration files have been generated and downloaded. Inside the zip file, you'll find:
-                                </p>
-                                <ul className="list-disc list-inside text-sm text-gray-600 mb-4">
-                                    <li>A README.md file with detailed instructions on how to run the migration</li>
-                                    <li>A cost estimation file that provides an idea of the running costs for your workload on the target IaaS and other cloud platforms</li>
-                                    <li>Terraform files for infrastructure setup</li>
-                                    <li>Dockerfiles for containerizing your applications</li>
-                                </ul>
-                                <p className="text-sm text-gray-600">
-                                    Please review these files carefully before proceeding with the migration. If you have any questions, don't hesitate to reach out to our support team.
-                                </p>
-                            </div>
-                        )}
                     </div>
                 )}
 
-                {(step === 1 || (step === 2 && !showFinalInfo)) && (
+                {step === 3 && (
+                    <div className="mt-4">
+                        <h3 className="text-lg font-semibold mb-2 text-gray-800">Migration Files Ready</h3>
+                        <p className="text-sm text-gray-600 mb-2">
+                            Your migration files have been generated and downloaded. Inside the zip file, you'll find:
+                        </p>
+                        <ul className="list-disc list-inside text-sm text-gray-600 mb-4">
+                            <li>A README.md file with detailed instructions on how to run the migration</li>
+                            <li>A cost estimation file that provides an idea of the running costs for your workload on
+                                the target IaaS and other cloud platforms
+                            </li>
+                            <li>Terraform files for infrastructure setup</li>
+                            <li>Dockerfiles for containerizing your applications</li>
+                        </ul>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Please review these files carefully before proceeding with the migration. If you have any
+                            questions, don't hesitate to reach out to our <a className="text-violet-700" href="https://www.qovery.com">support team</a>.
+                        </p>
+                        <Button onClick={handleRestart}
+                                className="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white">
+                            Restart
+                        </Button>
+                        <Link href="/" passHref>
+                            <Button variant="outline" className="w-full mt-4">
+                                Go Home
+                            </Button>
+                        </Link>
+                    </div>
+                )}
+
+                {(step === 1 || step === 2) && (
                     <Button type="submit" className="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white"
                             disabled={isLoading}>
                         {isLoading ? (
