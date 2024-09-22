@@ -3,8 +3,8 @@ import {Button} from "@/app/components/ui/button"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/app/components/ui/select"
 import {Input} from "@/app/components/ui/input"
 import {Alert, AlertDescription, AlertTitle} from "@/app/components/ui/alert"
-import {Loader2} from "lucide-react"
-import {migratePaas} from "@/app/lib/api"
+import {HelpCircle, Loader2} from "lucide-react"
+import {generateMigrationFiles} from "@/app/lib/api"
 import Link from 'next/link'
 import {
     SiFlyway,
@@ -20,7 +20,7 @@ import {
 } from "react-icons/si";
 import {Progress} from "@/app/components/ui/progress"
 import {FaAws} from "react-icons/fa";
-import {VscAzure} from "react-icons/vsc"; // Assuming you've saved the SVG components in a file named PlatformIcons.js
+import {VscAzure} from "react-icons/vsc";
 
 const paasOptions = [
     {value: "heroku", label: "Heroku", icon: <SiHeroku size={24}></SiHeroku>},
@@ -63,10 +63,11 @@ export default function GetStartedFlow() {
     const [selectedCloud, setSelectedCloud] = useState(cloudOptions[0].value)
     const [herokuApiKey, setHerokuApiKey] = useState("")
     const [isLoading, setIsLoading] = useState(false)
-    const [downloadUrl, setDownloadUrl] = useState("")
     const [error, setError] = useState("")
+    const [successMessage, setSuccessMessage] = useState("")
     const [migrationProgress, setMigrationProgress] = useState(0)
     const [currentMigrationStep, setCurrentMigrationStep] = useState(0)
+    const [showFinalInfo, setShowFinalInfo] = useState(false)
 
     const ArrowDown = () => (
         <svg className="w-8 h-8 mx-auto my-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -100,34 +101,47 @@ export default function GetStartedFlow() {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
+        setMigrationProgress(0)
+
         if (step === 1) {
             setStep(2)
         } else if (step === 2) {
             setIsLoading(true)
             setError("")
+            setSuccessMessage("")
             try {
-                const result = await migratePaas({
+                const result = await generateMigrationFiles({
                     source: selectedPaas,
                     destination: selectedCloud,
                     herokuApiKey,
                 })
-                setDownloadUrl(result.downloadUrl)
+
+                // Stop the migration progress animation
+                setIsLoading(false)
+                setMigrationProgress(100)
+                setCurrentMigrationStep(migrationSteps.length - 1)
+
+                // Create a download link
+                const url = URL.createObjectURL(result.blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = result.filename
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+
+                setSuccessMessage(`Download started for ${result.filename}`)
+                setShowFinalInfo(true)
             } catch (error: unknown) {
                 console.error("Migration failed:", error)
                 let errorMessage = "An unexpected error occurred. Please try again."
-                if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'data' in error.response) {
-                    try {
-                        const errorData = JSON.parse(error.response.data as string)
-                        errorMessage = errorData.error || errorMessage
-                    } catch (jsonError) {
-                        console.error("Error parsing JSON:", jsonError)
-                    }
+                if (error instanceof Error) {
+                    errorMessage = error.message
                 }
                 setError(errorMessage)
             } finally {
                 setIsLoading(false)
-                setMigrationProgress(0)
-                setCurrentMigrationStep(0)
             }
         }
     }
@@ -136,6 +150,7 @@ export default function GetStartedFlow() {
         if (step > 1) {
             setStep(step - 1)
             setError("")
+            setShowFinalInfo(false)
         }
     }
 
@@ -147,6 +162,13 @@ export default function GetStartedFlow() {
                 <Alert variant="destructive" className="mb-4">
                     <AlertTitle>Error</AlertTitle>
                     <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            )}
+
+            {successMessage && (
+                <Alert variant="default" className="mb-4">
+                    <AlertTitle>Success</AlertTitle>
+                    <AlertDescription>{successMessage}</AlertDescription>
                 </Alert>
             )}
 
@@ -203,7 +225,19 @@ export default function GetStartedFlow() {
 
                 {step === 2 && (
                     <div>
-                        <label className="block mb-2 text-sm font-medium text-gray-700">Enter Heroku API Key</label>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">Enter Heroku API Key</label>
+                            {selectedPaas === 'heroku' && (
+                                <a
+                                    href="https://help.heroku.com/PBGP6IDE/how-should-i-generate-an-api-key-that-allows-me-to-use-the-heroku-platform-api"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center text-sm text-blue-600 hover:underline"
+                                >
+                                    <HelpCircle size={16} className="mr-1"/>
+                                </a>
+                            )}
+                        </div>
                         <Input
                             type="password"
                             value={herokuApiKey}
@@ -229,48 +263,48 @@ export default function GetStartedFlow() {
                                 .
                             </AlertDescription>
                         </Alert>
-                        {!isLoading && (
+                        {!isLoading && !showFinalInfo && (
                             <p className="mt-4 text-sm text-gray-600">
                                 After clicking "Next", the generation of the migration files process will begin. This
-                                can take up to 5 minutes
-                                to complete.
+                                can take up to 5 minutes to complete.
                             </p>
                         )}
                         {isLoading && (
                             <div className="mt-4">
-                                <h3 className="text-lg font-semibold mb-2 text-gray-800">Migration Progress</h3>
+                                <h3 className="text-lg font-semibold mb-2 text-gray-800">Processing in Progress</h3>
                                 <Progress value={migrationProgress} className="w-full mb-4"/>
                                 <p className="text-sm text-gray-600">
                                     {migrationSteps[currentMigrationStep]}...
                                 </p>
                             </div>
                         )}
-                        {downloadUrl && (
+                        {showFinalInfo && (
                             <div className="mt-4">
-                                <p className="mb-2 text-gray-600">
-                                    Your migration files have been generated successfully!
+                                <h3 className="text-lg font-semibold mb-2 text-gray-800">Migration Files Ready</h3>
+                                <p className="text-sm text-gray-600 mb-2">
+                                    Your migration files have been generated and downloaded. Inside the zip file, you'll find:
                                 </p>
-                                <Link href={downloadUrl} passHref>
-                                    <Button className="w-full bg-violet-600 hover:bg-violet-700 text-white">
-                                        Download Migration Files
-                                    </Button>
-                                </Link>
-                                <p className="mt-4 text-sm text-gray-600">
-                                    Please review the instructions in the README.md file inside the archive for next
-                                    steps on reviewing and executing the Terraform files.
+                                <ul className="list-disc list-inside text-sm text-gray-600 mb-4">
+                                    <li>A README.md file with detailed instructions on how to run the migration</li>
+                                    <li>A cost estimation file that provides an idea of the running costs for your workload on the target IaaS and other cloud platforms</li>
+                                    <li>Terraform files for infrastructure setup</li>
+                                    <li>Dockerfiles for containerizing your applications</li>
+                                </ul>
+                                <p className="text-sm text-gray-600">
+                                    Please review these files carefully before proceeding with the migration. If you have any questions, don't hesitate to reach out to our support team.
                                 </p>
                             </div>
                         )}
                     </div>
                 )}
 
-                {(step === 1 || (step === 2 && !isLoading && !downloadUrl)) && (
+                {(step === 1 || (step === 2 && !showFinalInfo)) && (
                     <Button type="submit" className="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white"
                             disabled={isLoading}>
                         {isLoading ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
-                                Generating Migration Files...
+                                Generating Migration Files 🤖...
                             </>
                         ) : (
                             "Next"
@@ -279,7 +313,7 @@ export default function GetStartedFlow() {
                 )}
             </form>
 
-            {step === 2 && !isLoading && !downloadUrl && (
+            {step === 2 && !isLoading && (
                 <Button variant="ghost" className="w-full mt-4" onClick={handlePrevious}>
                     Previous
                 </Button>

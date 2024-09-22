@@ -7,11 +7,11 @@ interface HerokuMigrationRequest {
 }
 
 interface MigrationResponse {
-    downloadUrl: string;
-    // Add any other properties that the API response includes
+    blob: Blob;
+    filename: string;
 }
 
-export async function migratePaas(params: HerokuMigrationRequest): Promise<MigrationResponse> {
+export async function generateMigrationFiles(params: HerokuMigrationRequest): Promise<MigrationResponse> {
     const response = await fetch(`${API_HOST_URL}/api/migrate/${params.source}`, {
         method: 'POST',
         headers: {
@@ -21,14 +21,27 @@ export async function migratePaas(params: HerokuMigrationRequest): Promise<Migra
     })
 
     if (!response.ok) {
-        // if the response is a json object, we can parse it and throw a more specific error
+        let errorMessage = "An unexpected error occurred";
         if (response.headers.get('Content-Type')?.includes('application/json')) {
-            const error = await response.json()
-            throw new Error(error)
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
         }
-
-        throw new Error("An unexpected error occurred")
+        throw new Error(errorMessage);
     }
 
-    return await response.json()
+    // Check if the response is a zip file
+    const contentType = response.headers.get('Content-Type');
+    if (contentType === 'application/zip') {
+        const blob = await response.blob();
+        const filename = getFilenameFromContentDisposition(response.headers.get('Content-Disposition')) || 'download.zip';
+        return {blob, filename};
+    } else {
+        throw new Error("Unexpected response format");
+    }
+}
+
+function getFilenameFromContentDisposition(contentDisposition: string | null): string | null {
+    if (!contentDisposition) return null;
+    const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+    return filenameMatch ? filenameMatch[1] : null;
 }

@@ -25,7 +25,7 @@ export default function LandingPage() {
                             <Link href="/get-started" passHref>
                                 <Button
                                     className="bg-violet-600 hover:bg-violet-700 text-white font-medium py-2 px-6 rounded-full transition-colors">
-                                    Get Started
+                                    Get Started (No Signup)
                                 </Button>
                             </Link>
                             <Link href="https://github.com/Qovery/qovery-migration-ai-agent">
