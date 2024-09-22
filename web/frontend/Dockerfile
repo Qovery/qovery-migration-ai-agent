@@ -13,21 +13,17 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
-WORKDIR /usr/share/nginx/html
+FROM node:18-alpine
+WORKDIR /app
 
-# Remove default nginx static assets
-RUN rm -rf ./*
-
-# Copy static assets from builder stage
-COPY --from=builder /app/.next/static ./_next/static
+# Copy built assets from builder stage
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/images ./images
 
-# Copy nginx.conf
-COPY nginx.conf /etc/nginx/nginx.conf
+# Expose port 3000
+EXPOSE 3000
 
-# Expose port 80
-EXPOSE 80
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the Next.js app
+CMD ["npm", "start"]
