@@ -5,7 +5,7 @@ import Footer from "@/app/components/Footer";
 export default function Home() {
     return (
         <>
-            <div className="min-h-screen font-[family-name:var(--font-geist-sans)]">
+            <div className="flex flex-col min-h-screen bg-gradient-to-b from-[#1e1e3f] to-[#2d2d5f] text-white">
                 <Header/>
                 <LandingPage/>
                 <Footer/>
