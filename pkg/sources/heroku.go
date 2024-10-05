@@ -1,4 +1,4 @@
-package heroku
+package sources
 
 import (
 	"encoding/json"
@@ -19,30 +19,43 @@ type HerokuProvider struct {
 	Client *http.Client
 }
 
-// AppConfig represents the configuration for a Heroku app, including costs, pipeline info, and review apps
-type AppConfig struct {
-	App           map[string]interface{}
+// HerokuAppConfig represents the configuration for a Heroku app, including costs, pipeline info, and review apps
+type HerokuAppConfig struct {
+	mApp          map[string]interface{}
 	Config        map[string]string
 	Addons        []map[string]interface{}
 	Domains       []map[string]interface{}
-	Cost          float64
+	TotalCost     float64
 	Stage         string
 	ReviewApps    []map[string]interface{}
 	ReviewAppConf map[string]interface{}
 }
 
+func (a HerokuAppConfig) App() map[string]interface{} {
+	return a.mApp
+}
+
+func (a HerokuAppConfig) Cost() float64 {
+	return a.TotalCost
+}
+
 // Map returns a map representation of the AppConfig
-func (a AppConfig) Map() map[string]interface{} {
+func (a HerokuAppConfig) Map() map[string]interface{} {
 	return map[string]interface{}{
 		"app":             a.App,
 		"config":          a.Config,
 		"addons":          a.Addons,
 		"domains":         a.Domains,
-		"cost":            a.Cost,
+		"cost":            a.TotalCost,
 		"stage":           a.Stage,
 		"review_apps":     a.ReviewApps,
 		"review_app_conf": a.ReviewAppConf,
 	}
+}
+
+func (a HerokuAppConfig) Name() string {
+	appName, _ := a.mApp["name"].(string)
+	return appName
 }
 
 // HerokuError represents an error returned by the Heroku API
@@ -131,12 +144,12 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 				}
 			}
 
-			configs[i] = AppConfig{
-				App:           app,
+			configs[i] = HerokuAppConfig{
+				mApp:          app,
 				Config:        config,
 				Addons:        addons,
 				Domains:       domains,
-				Cost:          cost,
+				TotalCost:     cost,
 				Stage:         stage,
 				ReviewApps:    reviewApps,
 				ReviewAppConf: reviewAppConf,

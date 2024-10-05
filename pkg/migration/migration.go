@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/sources"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -13,7 +14,6 @@ import (
 
 	_ "embed"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/claude"
-	"github.com/Qovery/qovery-migration-ai-agent/pkg/heroku"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
 	"github.com/google/go-github/v39/github"
 	"golang.org/x/oauth2"
@@ -51,27 +51,36 @@ type ProgressUpdate struct {
 	Progress float64
 }
 
+func GenerateHerokuMigrationAssets(herokuAPIKey, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
+
+	herokuProvider := sources.NewHerokuProvider(herokuAPIKey)
+	configs, err := herokuProvider.GetAllAppsConfig()
+	if err != nil {
+		return nil, fmt.Errorf("error fetching Heroku configs: %w", err)
+	}
+
+	return GenerateMigrationAssets(configs, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+}
+
+func GenerateCleverCloudMigrationAssets(consumerKey, consumerSecret, cleverCloudKey, cleverCloudSecret, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
+
+	clevercloudProvider, err := sources.NewCleverCloudProvider(consumerKey, consumerSecret, cleverCloudKey, cleverCloudSecret)
+	configs, err := clevercloudProvider.GetAllAppsConfig()
+	if err != nil {
+		return nil, fmt.Errorf("error fetching Clever Cloud configs: %w", err)
+	}
+
+	return GenerateMigrationAssets(configs, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+}
+
 // GenerateMigrationAssets generates all necessary assets for migration and reports progress
-func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	claudeClient := claude.NewClaudeClient(claudeAPIKey)
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
 
-	var configs []heroku.AppConfig
 	var err error
-
-	// Fetch configs
-	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
-	switch source {
-	case "heroku":
-		herokuProvider := heroku.NewHerokuProvider(herokuAPIKey)
-		configs, err = herokuProvider.GetAllAppsConfig()
-		if err != nil {
-			return nil, fmt.Errorf("error fetching Heroku configs: %w", err)
-		}
-	// Add cases for other sources here in the future
-	default:
-		return nil, fmt.Errorf("unsupported source: %s", source)
-	}
 
 	progressChan <- ProgressUpdate{Stage: "Processing configs", Progress: 0.3}
 
@@ -83,12 +92,12 @@ func GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey, g
 
 	totalApps := len(configs)
 	for i, app := range configs {
-		appName := app.App["name"].(string)
+		appName := app.Name()
 		qoveryConfig := qoveryProvider.TranslateConfig(appName, app.Map(), destination)
 		qoveryConfigs[appName] = qoveryConfig
-		currentCost += app.Cost
+		currentCost += app.Cost()
 
-		dockerfile, dockerfileGenPrompt, err := generateDockerfile(app.App, claudeClient)
+		dockerfile, dockerfileGenPrompt, err := generateDockerfile(app.App(), claudeClient)
 		prompts = append(prompts, AssetsPrompt{Type: "DockerfileGen", Name: appName, Prompt: dockerfileGenPrompt, Result: dockerfile})
 
 		if err != nil {

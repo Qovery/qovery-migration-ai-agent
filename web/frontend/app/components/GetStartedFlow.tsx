@@ -3,10 +3,11 @@ import {Button} from "@/app/components/ui/button"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/app/components/ui/select"
 import {Input} from "@/app/components/ui/input"
 import {Alert, AlertDescription, AlertTitle} from "@/app/components/ui/alert"
-import {HelpCircle, CheckCircle2, Loader2} from "lucide-react"
+import {HelpCircle, Loader2} from "lucide-react"
 import {generateMigrationFiles} from "@/app/lib/api"
 import Link from 'next/link'
 import {
+    SiClevercloud,
     SiFlyway,
     SiGooglecloud,
     SiHeroku,
@@ -24,6 +25,7 @@ import {VscAzure} from "react-icons/vsc";
 
 const paasOptions = [
     {value: "heroku", label: "Heroku", icon: <SiHeroku size={24}/>},
+    {value: "clevercloud", label: "Clever Cloud", icon: <SiClevercloud size={24}/>},
     {value: "render", label: "Render (coming soon)", disabled: true, icon: <SiRender size={24}/>},
     {value: "railway", label: "Railway (coming soon)", disabled: true, icon: <SiRailway size={24}/>},
     {value: "fly", label: "Fly (coming soon)", disabled: true, icon: <SiFlyway size={24}/>},
@@ -62,6 +64,8 @@ export default function GetStartedFlow() {
     const [selectedPaas, setSelectedPaas] = useState(paasOptions[0].value)
     const [selectedCloud, setSelectedCloud] = useState(cloudOptions[0].value)
     const [herokuApiKey, setHerokuApiKey] = useState("")
+    const [cleverCloudToken, setCleverCloudToken] = useState("")
+    const [cleverCloudSecret, setCleverCloudSecret] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState("")
     const [successMessage, setSuccessMessage] = useState("")
@@ -109,7 +113,7 @@ export default function GetStartedFlow() {
             setError("")
             setSuccessMessage("")
 
-            if (herokuApiKey === "test") {
+            if (selectedPaas === "heroku" && herokuApiKey === "test") {
                 // Special case for the "test" API key
                 setTimeout(() => {
                     setIsLoading(false)
@@ -120,11 +124,14 @@ export default function GetStartedFlow() {
                 }, 2000) // Simulate a 2-second process for test mode
             } else {
                 try {
-                    const result = await generateMigrationFiles({
+                    const migrationRequest = {
                         source: selectedPaas,
                         destination: selectedCloud,
-                        herokuApiKey,
-                    })
+                        ...(selectedPaas === "heroku" && {herokuApiKey}),
+                        ...(selectedPaas === "clevercloud" && {cleverCloudToken, cleverCloudSecret}),
+                    };
+
+                    const result = await generateMigrationFiles(migrationRequest)
 
                     // Stop the migration progress animation
                     setIsLoading(false)
@@ -166,6 +173,73 @@ export default function GetStartedFlow() {
 
     const handleRestart = () => {
         window.location.reload()
+    }
+
+    const renderCredentialsInput = () => {
+        if (selectedPaas === "heroku") {
+            return (
+                <div>
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Enter Heroku API Key</label>
+                        <a
+                            href="https://help.heroku.com/PBGP6IDE/how-should-i-generate-an-api-key-that-allows-me-to-use-the-heroku-platform-api"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center text-sm text-blue-600 hover:underline"
+                        >
+                            <HelpCircle size={16} className="mr-1"/>
+                        </a>
+                    </div>
+                    <Input
+                        type="password"
+                        value={herokuApiKey}
+                        onChange={(e) => setHerokuApiKey(e.target.value)}
+                        placeholder="Enter your Heroku API Key"
+                        className="w-full mb-4"
+                        required
+                        disabled={isLoading}
+                    />
+                </div>
+            )
+        } else if (selectedPaas === "clevercloud") {
+            return (
+                <div>
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Enter Clever Cloud Token</label>
+                        <a
+                            href="https://www.clever-cloud.com/doc/clever-tools/getting_started/#configuration"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center text-sm text-blue-600 hover:underline"
+                        >
+                            <HelpCircle size={16} className="mr-1"/>
+                        </a>
+                    </div>
+                    <Input
+                        type="password"
+                        value={cleverCloudToken}
+                        onChange={(e) => setCleverCloudToken(e.target.value)}
+                        placeholder="Enter your Clever Cloud Token"
+                        className="w-full mb-4"
+                        required
+                        disabled={isLoading}
+                    />
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Enter Clever Cloud Secret</label>
+                    </div>
+                    <Input
+                        type="password"
+                        value={cleverCloudSecret}
+                        onChange={(e) => setCleverCloudSecret(e.target.value)}
+                        placeholder="Enter your Clever Cloud Secret"
+                        className="w-full mb-4"
+                        required
+                        disabled={isLoading}
+                    />
+                </div>
+            )
+        }
+        return null
     }
 
     return (
@@ -239,28 +313,7 @@ export default function GetStartedFlow() {
 
                 {step === 2 && (
                     <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-medium text-gray-700">Enter Heroku API Key</label>
-                            {selectedPaas === 'heroku' && (
-                                <a
-                                    href="https://help.heroku.com/PBGP6IDE/how-should-i-generate-an-api-key-that-allows-me-to-use-the-heroku-platform-api"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center text-sm text-blue-600 hover:underline"
-                                >
-                                    <HelpCircle size={16} className="mr-1"/>
-                                </a>
-                            )}
-                        </div>
-                        <Input
-                            type="password"
-                            value={herokuApiKey}
-                            onChange={(e) => setHerokuApiKey(e.target.value)}
-                            placeholder="Enter your Heroku API Key"
-                            className="w-full mb-4"
-                            required
-                            disabled={isLoading}
-                        />
+                        {renderCredentialsInput()}
                         <Alert>
                             <AlertTitle>🛡️ Your data is safe with us</AlertTitle>
                             <AlertDescription>
@@ -311,7 +364,9 @@ export default function GetStartedFlow() {
                         </ul>
                         <p className="text-sm text-gray-600 mb-4">
                             Please review these files carefully before proceeding with the migration. If you have any
-                            questions, don't hesitate to reach out to our <a className="text-violet-700" href="https://www.qovery.com">support team</a>.
+                            questions, don't hesitate to reach out to our <a className="text-violet-700"
+                                                                             href="https://www.qovery.com">support
+                            team</a>.
                         </p>
                         <Button onClick={handleRestart}
                                 className="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white">

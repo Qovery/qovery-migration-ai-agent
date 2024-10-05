@@ -1,9 +1,11 @@
 const API_HOST_URL = process.env.NEXT_PUBLIC_API_HOST_URL || 'http://localhost:3000'
 
-interface HerokuMigrationRequest {
+interface MigrationRequest {
     source: string;
     destination: string;
-    herokuApiKey: string;
+    herokuApiKey?: string;
+    cleverCloudToken?: string;
+    cleverCloudSecret?: string;
 }
 
 interface MigrationResponse {
@@ -11,33 +13,37 @@ interface MigrationResponse {
     filename: string;
 }
 
-export async function generateMigrationFiles(params: HerokuMigrationRequest): Promise<MigrationResponse> {
-    const response = await fetch(`${API_HOST_URL}/api/migrate/${params.source}`, {
+export async function generateMigrationFiles(migrationRequest: MigrationRequest): Promise<MigrationResponse> {
+    const response = await fetch(`${API_HOST_URL}/api/migrate/${migrationRequest.source}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(params),
-    })
+        body: JSON.stringify(migrationRequest),
+    });
 
     if (!response.ok) {
-        let errorMessage = "An unexpected error occurred";
-        if (response.headers.get('Content-Type')?.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-        }
+        const errorMessage = await getErrorMessage(response);
         throw new Error(errorMessage);
     }
 
-    // Check if the response is a zip file
     const contentType = response.headers.get('Content-Type');
-    if (contentType === 'application/zip') {
-        const blob = await response.blob();
-        const filename = getFilenameFromContentDisposition(response.headers.get('Content-Disposition')) || 'download.zip';
-        return {blob, filename};
-    } else {
+    if (contentType !== 'application/zip') {
         throw new Error("Unexpected response format");
     }
+
+    const blob = await response.blob();
+    const filename = getFilenameFromContentDisposition(response.headers.get('Content-Disposition')) || 'migration.zip';
+    return {blob, filename};
+}
+
+async function getErrorMessage(response: Response): Promise<string> {
+    const contentType = response.headers.get('Content-Type');
+    if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        return errorData.message || "An unexpected error occurred";
+    }
+    return "An unexpected error occurred";
 }
 
 function getFilenameFromContentDisposition(contentDisposition: string | null): string | null {

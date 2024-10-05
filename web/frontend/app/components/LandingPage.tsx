@@ -51,7 +51,7 @@ export default function LandingPage() {
                         <div className="w-full md:w-1/4">
                             <h3 className="text-lg md:text-xl font-semibold mb-4 text-center">Compatible PaaS</h3>
                             <ul className="space-y-2">
-                                {['Heroku', 'Render', 'Vercel', 'Netlify', 'DigitalOcean App Platform'].map((platform) => (
+                                {['Heroku', 'Render', 'Railway', 'Fly.io', 'Platform.sh', 'Vercel', 'Netlify', 'Clever Cloud', 'DigitalOcean App Platform'].map((platform) => (
                                     <li key={platform}
                                         className="bg-gray-800 rounded-lg py-2 px-4 text-center">{platform}</li>
                                 ))}
