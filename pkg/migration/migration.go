@@ -63,10 +63,10 @@ func GenerateHerokuMigrationAssets(herokuAPIKey, claudeAPIKey, qoveryAPIKey, git
 	return GenerateMigrationAssets(configs, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
 }
 
-func GenerateCleverCloudMigrationAssets(consumerKey, consumerSecret, cleverCloudKey, cleverCloudSecret, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateCleverCloudMigrationAssets(authToken, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
 
-	clevercloudProvider, err := sources.NewCleverCloudProvider(consumerKey, consumerSecret, cleverCloudKey, cleverCloudSecret)
+	clevercloudProvider := sources.NewCleverCloudProvider(authToken)
 	configs, err := clevercloudProvider.GetAllAppsConfig()
 	if err != nil {
 		return nil, fmt.Errorf("error fetching Clever Cloud configs: %w", err)

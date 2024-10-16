@@ -5,278 +5,285 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 )
 
 const (
 	cleverCloudAPIRootURL = "https://api.clever-cloud.com/v2"
-	authURL               = "https://api.clever-cloud.com/v2/oauth/token"
+	cleverCloudAPIV4URL   = "https://api.clever-cloud.com/v4"
 )
 
-// CleverCloudProvider represents a client for interacting with the Clever Cloud API
 type CleverCloudProvider struct {
-	ConsumerKey    string
-	ConsumerSecret string
-	Token          string
-	Secret         string
-	AccessToken    string
-	Client         *http.Client
+	client    *http.Client
+	authToken string
 }
 
-// CleverCloudAppConfig represents the configuration for a Clever Cloud app, including costs, addons, and domains
+type CleverCloudSummary struct {
+	User          interface{}               `json:"user"`
+	Organisations []CleverCloudOrganisation `json:"organisations"`
+}
+
+type CleverCloudOrganisation struct {
+	ID           string                  `json:"id"`
+	Name         string                  `json:"name"`
+	Applications []CleverCloudAppBasic   `json:"applications"`
+	Addons       []CleverCloudAddonBasic `json:"addons"`
+}
+
+type CleverCloudAppBasic struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type CleverCloudAddonBasic struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type CleverCloudAppConfig struct {
-	mApp      map[string]interface{}
-	Config    map[string]string
-	Addons    []map[string]interface{}
-	Domains   []map[string]interface{}
-	TotalCost float64
+	ID            string                  `json:"id"`
+	MName         string                  `json:"name"`
+	Description   string                  `json:"description"`
+	Zone          string                  `json:"zone"`
+	Instance      map[string]interface{}  `json:"instance"`
+	Deployment    map[string]interface{}  `json:"deployment"`
+	Vhosts        []map[string]string     `json:"vhosts"`
+	CreationDate  int64                   `json:"creationDate"`
+	State         string                  `json:"state"`
+	Env           []map[string]string     `json:"env"`
+	Addons        []CleverCloudAddonBasic `json:"addons"`
+	CustomDomains []map[string]string     `json:"customDomains"`
 }
 
-func (a CleverCloudAppConfig) App() map[string]interface{} {
-	return a.mApp
+type CleverCloudAddonConfig struct {
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	RealID       string                 `json:"realId"`
+	Region       string                 `json:"region"`
+	Provider     map[string]interface{} `json:"provider"`
+	Plan         map[string]interface{} `json:"plan"`
+	CreationDate int64                  `json:"creationDate"`
+	ConfigKeys   []string               `json:"configKeys"`
+	EnvVars      map[string]string      `json:"envVars"`
 }
 
-func (a CleverCloudAppConfig) Cost() float64 {
-	return a.TotalCost
-}
-
-// Map returns a map representation of the AppConfig
-func (a CleverCloudAppConfig) Map() map[string]interface{} {
+func (c CleverCloudAppConfig) App() map[string]interface{} {
 	return map[string]interface{}{
-		"app":     a.App,
-		"config":  a.Config,
-		"addons":  a.Addons,
-		"domains": a.Domains,
-		"cost":    a.Cost,
+		"id":            c.ID,
+		"name":          c.Name,
+		"description":   c.Description,
+		"zone":          c.Zone,
+		"instance":      c.Instance,
+		"deployment":    c.Deployment,
+		"vhosts":        c.Vhosts,
+		"creationDate":  c.CreationDate,
+		"state":         c.State,
+		"env":           c.Env,
+		"addons":        c.Addons,
+		"customDomains": c.CustomDomains,
 	}
 }
 
-func (a CleverCloudAppConfig) Name() string {
-	appName, _ := a.mApp["name"].(string)
-	return appName
+func (c CleverCloudAppConfig) Name() string {
+	return c.MName
 }
 
-// CleverCloudError represents an error returned by the Clever Cloud API
-type CleverCloudError struct {
-	Message string `json:"message"`
+func (c CleverCloudAppConfig) Cost() float64 {
+	// TODO check if there's a cost API for Clever Cloud
+	return 0
 }
 
-// NewCleverCloudProvider creates a new CleverCloudProvider with the given credentials
-func NewCleverCloudProvider(consumerKey, consumerSecret, token, secret string) (*CleverCloudProvider, error) {
-	provider := &CleverCloudProvider{
-		ConsumerKey:    consumerKey,
-		ConsumerSecret: consumerSecret,
-		Token:          token,
-		Secret:         secret,
-		Client:         &http.Client{},
+func (c CleverCloudAppConfig) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"app":  c.App(),
+		"cost": c.Cost(),
 	}
-
-	err := provider.authenticate()
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate: %w", err)
-	}
-
-	return provider, nil
 }
 
-func (c *CleverCloudProvider) authenticate() error {
-	data := url.Values{}
-	data.Set("grant_type", "client_credentials")
-
-	req, err := http.NewRequest("POST", authURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return fmt.Errorf("error creating auth request: %w", err)
+func NewCleverCloudProvider(authToken string) *CleverCloudProvider {
+	return &CleverCloudProvider{
+		client:    &http.Client{},
+		authToken: authToken,
 	}
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(c.ConsumerKey, c.ConsumerSecret)
-
-	resp, err := c.Client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error sending auth request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("error reading auth response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("auth request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var authResp struct {
-		AccessToken string `json:"access_token"`
-	}
-	err = json.Unmarshal(body, &authResp)
-	if err != nil {
-		return fmt.Errorf("error decoding auth response: %w", err)
-	}
-
-	c.AccessToken = authResp.AccessToken
-	return nil
 }
 
-// GetAllAppsConfig retrieves the configuration for all Clever Cloud apps, including env vars, addons, domains, and costs
 func (c *CleverCloudProvider) GetAllAppsConfig() ([]AppConfig, error) {
-	apps, err := c.getApps()
+	summary, err := c.getSummary()
 	if err != nil {
 		return nil, err
 	}
 
 	var wg sync.WaitGroup
-	configs := make([]AppConfig, len(apps))
+	var mu sync.Mutex
+	var allApps []CleverCloudAppConfig
 
-	for i, app := range apps {
-		wg.Add(1)
-		go func(i int, app map[string]interface{}) {
-			defer wg.Done()
-			appID, _ := app["id"].(string)
-			config, err := c.getAppConfig(appID)
-			if err != nil {
-				fmt.Printf("Error fetching config for app %s: %v\n", appID, err)
-				return
-			}
-			addons, err := c.getAppAddons(appID)
-			if err != nil {
-				fmt.Printf("Error fetching addons for app %s: %v\n", appID, err)
-				return
-			}
-			domains, err := c.getAppDomains(appID)
-			if err != nil {
-				fmt.Printf("Error fetching domains for app %s: %v\n", appID, err)
-				return
-			}
-			cost, err := c.getAppCost(appID)
-			if err != nil {
-				fmt.Printf("Error fetching cost for app %s: %v\n", appID, err)
-				return
-			}
+	for _, org := range summary.Organisations {
+		for _, app := range org.Applications {
+			wg.Add(1)
+			go func(orgID, appID string) {
+				defer wg.Done()
+				appConfig, err := c.getAppDetails(orgID, appID)
+				if err != nil {
+					fmt.Printf("Error fetching details for app %s: %v\n", appID, err)
+					return
+				}
 
-			configs[i] = CleverCloudAppConfig{
-				mApp:      app,
-				Config:    config,
-				Addons:    addons,
-				Domains:   domains,
-				TotalCost: cost,
-			}
-		}(i, app)
+				envVars, err := c.getAppEnvVars(orgID, appID)
+				if err != nil {
+					fmt.Printf("Error fetching env vars for app %s: %v\n", appID, err)
+				} else {
+					appConfig.Env = envVars
+				}
+
+				customDomains, err := c.getAppCustomDomains(orgID, appID)
+				if err != nil {
+					fmt.Printf("Error fetching custom domains for app %s: %v\n", appID, err)
+				} else {
+					appConfig.CustomDomains = customDomains
+				}
+
+				addons, err := c.getAppAddons(orgID, appID)
+				if err != nil {
+					fmt.Printf("Error fetching addons for app %s: %v\n", appID, err)
+				} else {
+					appConfig.Addons = addons
+				}
+
+				mu.Lock()
+				allApps = append(allApps, appConfig)
+				mu.Unlock()
+			}(org.ID, app.ID)
+		}
 	}
 
 	wg.Wait()
 
-	return configs, nil
-}
-
-func (c *CleverCloudProvider) getApps() ([]map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/organisations/orga_/applications", cleverCloudAPIRootURL)
-	return c.makeRequest("GET", url, nil)
-}
-
-func (c *CleverCloudProvider) getAppConfig(appID string) (map[string]string, error) {
-	url := fmt.Sprintf("%s/applications/%s/environment", cleverCloudAPIRootURL, appID)
-	return c.makeRequestConfig("GET", url)
-}
-
-func (c *CleverCloudProvider) getAppAddons(appID string) ([]map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/applications/%s/addons", cleverCloudAPIRootURL, appID)
-	return c.makeRequest("GET", url, nil)
-}
-
-func (c *CleverCloudProvider) getAppDomains(appID string) ([]map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/applications/%s/vhosts", cleverCloudAPIRootURL, appID)
-	return c.makeRequest("GET", url, nil)
-}
-
-func (c *CleverCloudProvider) getAppCost(appID string) (float64, error) {
-	// Note: Clever Cloud API doesn't seem to have a direct endpoint for app cost
-	// This is a placeholder implementation. You may need to calculate the cost
-	// based on the app's configuration and pricing information.
-	return 0, nil
-}
-
-func (c *CleverCloudProvider) makeRequest(method, url string, body []byte) ([]map[string]interface{}, error) {
-	req, err := http.NewRequest(method, url, ioutil.NopCloser(strings.NewReader(string(body))))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+	var appConfigs []AppConfig
+	for _, app := range allApps {
+		appConfigs = append(appConfigs, app)
 	}
 
-	c.addAuthHeader(req)
+	return appConfigs, nil
+}
 
-	resp, err := c.Client.Do(req)
+func (c *CleverCloudProvider) GetAllAddonsConfig() ([]CleverCloudAddonConfig, error) {
+	summary, err := c.getSummary()
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %w", err)
+		return nil, err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		var cleverErr CleverCloudError
-		if err := json.Unmarshal(respBody, &cleverErr); err == nil {
-			return nil, fmt.Errorf("API error: %s", cleverErr.Message)
-		}
-		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(respBody))
-	}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var allAddons []CleverCloudAddonConfig
 
-	var result []map[string]interface{}
-	err = json.Unmarshal(respBody, &result)
-	if err != nil {
-		// If unmarshaling to slice fails, try unmarshaling to single object
-		var singleResult map[string]interface{}
-		if err := json.Unmarshal(respBody, &singleResult); err == nil {
-			result = []map[string]interface{}{singleResult}
-		} else {
-			return nil, fmt.Errorf("error decoding response: %w", err)
+	for _, org := range summary.Organisations {
+		for _, addon := range org.Addons {
+			wg.Add(1)
+			go func(orgID, addonID string) {
+				defer wg.Done()
+				addonConfig, err := c.getAddonDetails(orgID, addonID)
+				if err != nil {
+					fmt.Printf("Error fetching details for addon %s: %v\n", addonID, err)
+					return
+				}
+
+				if addonConfig.Provider["id"] == "config-provider" {
+					envVars, err := c.getAddonEnvVars(addonConfig.RealID)
+					if err != nil {
+						fmt.Printf("Error fetching env vars for addon %s: %v\n", addonID, err)
+					} else {
+						addonConfig.EnvVars = envVars
+					}
+				}
+
+				mu.Lock()
+				allAddons = append(allAddons, addonConfig)
+				mu.Unlock()
+			}(org.ID, addon.ID)
 		}
 	}
 
-	return result, nil
+	wg.Wait()
+	return allAddons, nil
 }
 
-func (c *CleverCloudProvider) makeRequestConfig(method, url string) (map[string]string, error) {
+func (c *CleverCloudProvider) getSummary() (*CleverCloudSummary, error) {
+	url := fmt.Sprintf("%s/summary", cleverCloudAPIRootURL)
+	var summary CleverCloudSummary
+	err := c.makeRequest("GET", url, nil, &summary)
+	return &summary, err
+}
+
+func (c *CleverCloudProvider) getAppDetails(orgID, appID string) (CleverCloudAppConfig, error) {
+	url := fmt.Sprintf("%s/organisations/%s/applications/%s", cleverCloudAPIRootURL, orgID, appID)
+	var appConfig CleverCloudAppConfig
+	err := c.makeRequest("GET", url, nil, &appConfig)
+	return appConfig, err
+}
+
+func (c *CleverCloudProvider) getAppEnvVars(orgID, appID string) ([]map[string]string, error) {
+	url := fmt.Sprintf("%s/organisations/%s/applications/%s/env", cleverCloudAPIRootURL, orgID, appID)
+	var envVars []map[string]string
+	err := c.makeRequest("GET", url, nil, &envVars)
+	return envVars, err
+}
+
+func (c *CleverCloudProvider) getAppCustomDomains(orgID, appID string) ([]map[string]string, error) {
+	url := fmt.Sprintf("%s/organisations/%s/applications/%s/vhosts", cleverCloudAPIRootURL, orgID, appID)
+	var customDomains []map[string]string
+	err := c.makeRequest("GET", url, nil, &customDomains)
+	return customDomains, err
+}
+
+func (c *CleverCloudProvider) getAppAddons(orgID, appID string) ([]CleverCloudAddonBasic, error) {
+	url := fmt.Sprintf("%s/organisations/%s/applications/%s/addons", cleverCloudAPIRootURL, orgID, appID)
+	var addons []CleverCloudAddonBasic
+	err := c.makeRequest("GET", url, nil, &addons)
+	return addons, err
+}
+
+func (c *CleverCloudProvider) getAddonDetails(orgID, addonID string) (CleverCloudAddonConfig, error) {
+	url := fmt.Sprintf("%s/organisations/%s/addons/%s", cleverCloudAPIRootURL, orgID, addonID)
+	var addonConfig CleverCloudAddonConfig
+	err := c.makeRequest("GET", url, nil, &addonConfig)
+	return addonConfig, err
+}
+
+func (c *CleverCloudProvider) getAddonEnvVars(realAddonID string) (map[string]string, error) {
+	url := fmt.Sprintf("%s/addon-providers/config-provider/addons/%s/env", cleverCloudAPIV4URL, realAddonID)
+	var envVars map[string]string
+	err := c.makeRequest("GET", url, nil, &envVars)
+	return envVars, err
+}
+
+func (c *CleverCloudProvider) makeRequest(method, url string, body []byte, v interface{}) error {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return fmt.Errorf("error creating request: %w", err)
 	}
 
-	c.addAuthHeader(req)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", c.authToken)
 
-	resp, err := c.Client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
+		return fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %w", err)
+		return fmt.Errorf("error reading response body: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		var cleverErr CleverCloudError
-		if err := json.Unmarshal(body, &cleverErr); err == nil {
-			return nil, fmt.Errorf("API error: %s", cleverErr.Message)
-		}
-		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]string
-	err = json.Unmarshal(body, &result)
+	err = json.Unmarshal(body, v)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding response: %w", err)
+		return fmt.Errorf("error decoding response: %w", err)
 	}
 
-	return result, nil
-}
-
-func (c *CleverCloudProvider) addAuthHeader(req *http.Request) {
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.AccessToken))
-	req.Header.Add("Accept", "application/json")
+	return nil
 }
