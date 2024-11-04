@@ -24,7 +24,7 @@ var prepareCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(prepareCmd)
-	prepareCmd.Flags().StringVarP(&source, "from", "f", "", "Source platform (e.g., 'heroku') (required)")
+	prepareCmd.Flags().StringVarP(&source, "from", "f", "", "Source platform (e.g., 'heroku', 'clevercloud') (required)")
 	prepareCmd.Flags().StringVarP(&destination, "to", "t", "", "Destination cloud provider (aws, gcp, or scaleway) (required)")
 	prepareCmd.Flags().StringVarP(&outputDir, "output", "o", "", "Output directory for generated files")
 	_ = prepareCmd.MarkFlagRequired("from")
@@ -33,8 +33,8 @@ func init() {
 
 func runPrepare(cmd *cobra.Command, args []string) {
 	// Validate source
-	if source != "heroku" {
-		fmt.Println("Error: Currently only 'heroku' is supported as a source")
+	if source != "heroku" && source != "clevercloud" {
+		fmt.Println("Error: Currently only 'heroku' and 'clevercloud' is supported as a source")
 		os.Exit(1)
 	}
 
@@ -47,7 +47,14 @@ func runPrepare(cmd *cobra.Command, args []string) {
 	// Check for HEROKU_API_KEY when source is heroku
 	herokuAPIKey := os.Getenv("HEROKU_API_KEY")
 	if source == "heroku" && herokuAPIKey == "" {
-		fmt.Println("Error: HEROKU_API_KEY must be set in the .env file when using Heroku as the source")
+		fmt.Println("Error: HEROKU_API_KEY env var must be set when using Heroku as the source")
+		os.Exit(1)
+	}
+
+	// Check for CLEVERCLOUD_AUTH_TOKEN when source is clevercloud
+	clevercloudAuthToken := os.Getenv("CLEVERCLOUD_AUTH_TOKEN")
+	if source == "clevercloud" && clevercloudAuthToken == "" {
+		fmt.Println("Error: CLEVERCLOUD_AUTH_TOKEN env var must be set when using Clever Cloud as the source")
 		os.Exit(1)
 	}
 
@@ -85,8 +92,16 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	assets, err := migration.GenerateMigrationAssets(source, herokuAPIKey, claudeAPIKey, qoveryAPIKey,
-		githubToken, destination, progressChan)
+	var assets *migration.Assets
+	var err error
+
+	if source == "heroku" {
+		assets, err = migration.GenerateHerokuMigrationAssets(herokuAPIKey, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+	}
+
+	if source == "clevercloud" {
+		assets, err = migration.GenerateCleverCloudMigrationAssets(clevercloudAuthToken, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+	}
 
 	// Close the progress channel
 	close(progressChan)

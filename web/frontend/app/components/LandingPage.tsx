@@ -3,8 +3,6 @@ import {Button} from "@/app/components/ui/button";
 import {ArrowRight, Bot, Cloud, Github, Shield, Zap} from "lucide-react";
 import Link from "next/link";
 import VideoSection from "@/app/components/VideoSection";
-import Header from "@/app/components/Header";
-import Footer from "@/app/components/Footer";
 
 export default function LandingPage() {
     return (
@@ -19,8 +17,8 @@ export default function LandingPage() {
                         AI-Powered Cloud Migration
                     </h1>
                     <p className="text-gray-300 text-sm sm:text-base md:text-lg mb-6 max-w-[90%] sm:max-w-[70%] mx-auto">
-                        Qovery AI Cloud Migration Agent eliminates your cloud migration headaches. Migrate and
-                        maintain a secure and compliant cloud infrastructure in hours - not months!
+                        Migrate your apps from Heroku, Render, and other PaaS to AWS, GCP, Azure, and more in 5 minutes.
+                        Qovery AI Cloud Migration Agent eliminates your cloud migration headaches.
                     </p>
                     <div className="flex flex-col sm:flex-row justify-center gap-4 mb-4">
                         <Link href="/get-started" passHref>
@@ -77,11 +75,11 @@ export default function LandingPage() {
                         <div className="w-full md:w-1/4">
                             <h3 className="text-lg md:text-xl font-semibold mb-4 text-center">Target IaaS</h3>
                             <ul className="space-y-2">
-                                {['AWS', 'Google Cloud Platform', 'Microsoft Azure', 'Scaleway'].map((platform) => (
+                                {['AWS EKS', 'Google Cloud Platform GKE', 'Azure AKS', 'Scaleway Kapsule'].map((platform) => (
                                     <li key={platform}
                                         className="bg-gray-800 rounded-lg py-2 px-4 text-center">{platform}</li>
                                 ))}
-                                <li className="bg-blue-800 rounded-lg py-2 px-4 text-center">Kubernetes</li>
+                                <li className="bg-blue-800 rounded-lg py-2 px-4 text-center">On-Premise Kubernetes</li>
                             </ul>
                         </div>
                     </div>
@@ -194,7 +192,7 @@ export default function LandingPage() {
                         <h2 className="text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">Qovery is Trusted by 200+
                             Organizations Worldwide</h2>
                         <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-8">
-                            {['Eurovision', 'Elevo', 'KirkpatrickPrice', 'Common', 'FlowBank'].map((company) => (
+                            {['Alan', 'GetSafe', 'Talkspace', 'Red Bull', 'Greenly'].map((company) => (
                                 <div key={company}
                                      className="w-24 sm:w-32 h-10 sm:h-12 bg-gray-800 rounded flex items-center justify-center">
                                     <span className="text-gray-300 font-medium text-xs sm:text-sm">{company}</span>

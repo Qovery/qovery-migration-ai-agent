@@ -25,7 +25,6 @@ import {VscAzure} from "react-icons/vsc";
 
 const paasOptions = [
     {value: "heroku", label: "Heroku", icon: <SiHeroku size={24}/>},
-    {value: "clevercloud", label: "Clever Cloud", icon: <SiClevercloud size={24}/>},
     {value: "render", label: "Render (coming soon)", disabled: true, icon: <SiRender size={24}/>},
     {value: "railway", label: "Railway (coming soon)", disabled: true, icon: <SiRailway size={24}/>},
     {value: "fly", label: "Fly (coming soon)", disabled: true, icon: <SiFlyway size={24}/>},
@@ -37,14 +36,15 @@ const paasOptions = [
         disabled: true,
         icon: <SiPlatformdotsh size={24}/>
     },
+    {value: "clevercloud", label: "Clever Cloud (contact us)", disabled: true, icon: <SiClevercloud size={24}/>},
 ]
 
 const cloudOptions = [
-    {value: "aws", label: "AWS", icon: <FaAws size={24}/>},
-    {value: "gcp", label: "GCP", icon: <SiGooglecloud size={24}/>},
-    {value: "azure", label: "Azure", icon: <VscAzure size={24}/>},
-    {value: "scaleway", label: "Scaleway", icon: <SiScaleway size={24}/>},
-    {value: "kubernetes", label: "Kubernetes", icon: <SiKubernetes size={24}/>},
+    {value: "aws", label: "AWS EKS", icon: <FaAws size={24}/>},
+    {value: "gcp", label: "Google Cloud Platform GKE", icon: <SiGooglecloud size={24}/>},
+    {value: "azure", label: "Azure AKS", icon: <VscAzure size={24}/>},
+    {value: "scaleway", label: "Scaleway Kapsule", icon: <SiScaleway size={24}/>},
+    {value: "kubernetes", label: "On-Premise Kubernetes", icon: <SiKubernetes size={24}/>},
 ]
 
 const migrationSteps = [
