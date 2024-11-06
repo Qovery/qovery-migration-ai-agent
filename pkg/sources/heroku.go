@@ -156,8 +156,10 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 
 			mDomains := make([]Domain, len(domains))
 			for i, domain := range domains {
-				mDomains[i] = Domain{
-					Cname: domain["cname"].(string),
+				if cname, ok := domain["cname"].(string); ok {
+					mDomains[i] = Domain{
+						Cname: cname,
+					}
 				}
 			}
 
