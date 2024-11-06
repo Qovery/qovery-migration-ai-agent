@@ -42,7 +42,7 @@ func (a HerokuAppConfig) Cost() float64 {
 // Map returns a map representation of the AppConfig
 func (a HerokuAppConfig) Map() map[string]interface{} {
 	return map[string]interface{}{
-		"app":             a.App,
+		"app":             a.App(),
 		"config":          a.Config,
 		"addons":          a.Addons,
 		"domains":         a.Domains,
