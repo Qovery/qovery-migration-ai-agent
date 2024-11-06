@@ -21,14 +21,14 @@ type HerokuProvider struct {
 
 // HerokuAppConfig represents the configuration for a Heroku app, including costs, pipeline info, and review apps
 type HerokuAppConfig struct {
-	mApp          map[string]interface{}
+	mApp          map[string]interface{} `json:"app,omitempty"`
 	Config        map[string]string
-	Addons        []map[string]interface{}
-	Domains       []map[string]interface{}
+	Addons        []map[string]interface{} `json:"addons,omitempty"`
+	Domains       []Domain                 `json:"domains,omitempty"`
 	TotalCost     float64
-	Stage         string
-	ReviewApps    []map[string]interface{}
-	ReviewAppConf map[string]interface{}
+	Stage         string                   `json:"stage,omitempty"`
+	ReviewApps    []map[string]interface{} `json:"review_apps,omitempty"`
+	ReviewAppConf map[string]interface{}   `json:"review_app_conf,omitempty"`
 }
 
 func (a HerokuAppConfig) App() map[string]interface{} {
@@ -56,6 +56,16 @@ func (a HerokuAppConfig) Map() map[string]interface{} {
 func (a HerokuAppConfig) Name() string {
 	appName, _ := a.mApp["name"].(string)
 	return appName
+}
+
+type Domain struct {
+	Cname string `json:"cname,omitempty"`
+}
+
+func (d Domain) Map() map[string]interface{} {
+	return map[string]interface{}{
+		"cname": d.Cname,
+	}
 }
 
 // HerokuError represents an error returned by the Heroku API
@@ -144,11 +154,18 @@ func (h *HerokuProvider) GetAllAppsConfig() ([]AppConfig, error) {
 				}
 			}
 
+			mDomains := make([]Domain, len(domains))
+			for i, domain := range domains {
+				mDomains[i] = Domain{
+					Cname: domain["cname"].(string),
+				}
+			}
+
 			configs[i] = HerokuAppConfig{
 				mApp:          app,
 				Config:        config,
 				Addons:        addons,
-				Domains:       domains,
+				Domains:       mDomains,
 				TotalCost:     cost,
 				Stage:         stage,
 				ReviewApps:    reviewApps,
