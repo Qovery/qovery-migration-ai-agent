@@ -22,21 +22,12 @@ import (
 //go:embed _readme.md
 var readmeContent string
 
-type AssetsPrompt struct {
-	Type   string
-	Name   string
-	Prompt string
-	Result string
-}
-
 // Assets represents the generated assets for migration
 type Assets struct {
 	ReadmeMarkdown               string
-	TerraformMain                string
-	TerraformVariables           string
+	GeneratedTerraformFiles      []GeneratedTerraform
 	Dockerfiles                  []Dockerfile
 	CostEstimationReportMarkdown string
-	Prompts                      []AssetsPrompt
 }
 
 // Dockerfile represents a generated Dockerfile for an app
@@ -86,7 +77,6 @@ func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAP
 
 	var qoveryConfigs = make(map[string]interface{})
 	var dockerfiles []Dockerfile
-	var prompts []AssetsPrompt
 
 	var currentCost = 0.0
 
@@ -97,8 +87,7 @@ func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAP
 		qoveryConfigs[appName] = qoveryConfig
 		currentCost += app.Cost()
 
-		dockerfile, dockerfileGenPrompt, err := generateDockerfile(app.App(), claudeClient)
-		prompts = append(prompts, AssetsPrompt{Type: "DockerfileGen", Name: appName, Prompt: dockerfileGenPrompt, Result: dockerfile})
+		dockerfile, _, err := generateDockerfile(app.App(), claudeClient)
 
 		if err != nil {
 			return nil, fmt.Errorf("error generating Dockerfile for %s: %w", appName, err)
@@ -116,18 +105,19 @@ func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAP
 	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
 
 	// TODO export loadQoveryTerraformDocMarkdown as a parameter
-	terraformMain, terraformVariables, terraformGenPrompt, err := generateTerraform(qoveryConfigs, destination, claudeClient, githubToken, false)
-	prompts = append(prompts, AssetsPrompt{Type: "TerraformGen", Name: "main.tf", Prompt: terraformGenPrompt, Result: terraformMain})
-	prompts = append(prompts, AssetsPrompt{Type: "TerraformGen", Name: "variables.tf", Prompt: terraformGenPrompt, Result: terraformVariables})
-
-	if err != nil {
-		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
+	generatedTerraformFiles, err := generateTerraformFiles(qoveryConfigs, destination, claudeClient, githubToken, false)
+	// check there is no error in the generation of Terraform files
+	for _, generatedTerraformFile := range generatedTerraformFiles {
+		if generatedTerraformFile.MainTf == "" {
+			return nil, fmt.Errorf("error generating Terraform configs for %s: %w", generatedTerraformFile.AppName, err)
+		}
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Estimating costs", Progress: 0.9}
 
-	costEstimation, costEstimationPrompt, err := EstimateWorkloadCosts(terraformMain, currentCost, claudeClient)
-	prompts = append(prompts, AssetsPrompt{Type: "CostEstimation", Name: "cost_estimation_report.md", Prompt: costEstimationPrompt, Result: costEstimation})
+	// TODO fix the cost estimation
+	// costEstimation, costEstimationPrompt, err := EstimateWorkloadCosts(terraformMain, currentCost, claudeClient)
+	// prompts = append(prompts, AssetsPrompt{Type: "CostEstimation", Name: "cost_estimation_report.md", Prompt: costEstimationPrompt, Result: costEstimation})
 
 	if err != nil {
 		return nil, fmt.Errorf("error estimating workload costs: %w", err)
@@ -135,11 +125,9 @@ func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAP
 
 	assets := &Assets{
 		ReadmeMarkdown:               readmeContent,
-		TerraformMain:                terraformMain,
-		TerraformVariables:           terraformVariables,
+		GeneratedTerraformFiles:      generatedTerraformFiles,
 		Dockerfiles:                  dockerfiles,
-		CostEstimationReportMarkdown: costEstimation,
-		Prompts:                      prompts,
+		CostEstimationReportMarkdown: "",
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Completed", Progress: 1.0}
@@ -154,8 +142,8 @@ func generateDockerfile(appConfig map[string]interface{}, claudeClient *claude.C
 		return "", "", fmt.Errorf("error marshaling app config: %w", err)
 	}
 
-	prompt := fmt.Sprintf(`Generate a Dockerfile for the following app configuration:\n%s\n\n
-Instructions:
+	prompt := fmt.Sprintf(`GENERATE A DOCKERFILE FOR THE FOLLOWING APP CONFIGURATION:\n%s\n\n
+INSTRUCTIONS THAT MUST BE FOLLOWED:
 - You should find all the information you need like the language, the potential framework and the version associated.
 - The Dockerfile should be optimized for the best performance and security.
 - Generate just the Dockerfile content and nothing else.
@@ -165,35 +153,43 @@ Instructions:
 	return result, prompt, err
 }
 
-// generateTerraform generates Terraform configurations for Qovery
-func generateTerraform(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient,
-	githubToken string, loadQoveryTerraformDocMarkdown bool) (string, string, string, error) {
+type GeneratedTerraform struct {
+	AppName     string
+	MainTf      string
+	VariablesTf string
+	Prompt      string
+}
 
-	configJSON, err := json.Marshal(qoveryConfigs)
-	if err != nil {
-		return "", "", "", fmt.Errorf("error marshaling Qovery configs: %w", err)
-	}
+func (g GeneratedTerraform) SanitizeAppName() string {
+	s := strings.ReplaceAll(g.AppName, " ", "_")
+	s = strings.ReplaceAll(s, "-", "_")
+	return strings.ToLower(s)
+}
+
+// generateTerraformFiles generates Terraform configurations for Qovery
+func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient,
+	githubToken string, loadQoveryTerraformDocMarkdown bool) ([]GeneratedTerraform, error) {
 
 	officialExamples, err := loadTerraformExamples("Qovery", "terraform-examples", "examples", githubToken)
 	if err != nil {
-		return "", "", "", fmt.Errorf("error loading Terraform examples: %w", err)
+		return nil, fmt.Errorf("error loading Terraform examples: %w", err)
 	}
 
 	airbyteExample, err := loadTerraformExamples("evoxmusic", "qovery-airbyte", ".", githubToken)
 	if err != nil {
-		return "", "", "", fmt.Errorf("error loading Airbyte Terraform example: %w", err)
+		return nil, fmt.Errorf("error loading Airbyte Terraform example: %w", err)
 	}
 
 	qoveryTerraformDocMarkdown, err := loadMarkdownFiles("Qovery", "terraform-provider-qovery", "main", githubToken)
 	if err != nil {
-		return "", "", "", fmt.Errorf("error loading Qovery Terraform Provider markdown documentation: %w", err)
+		return nil, fmt.Errorf("error loading Qovery Terraform Provider markdown documentation: %w", err)
 	}
 
 	examples := append(officialExamples, airbyteExample...)
 
 	examplesJSON, err := json.Marshal(examples)
 	if err != nil {
-		return "", "", "", fmt.Errorf("error marshaling Terraform examples: %w", err)
+		return nil, fmt.Errorf("error marshaling Terraform examples: %w", err)
 	}
 
 	var qoveryTerraformDocMarkdownJSON []byte
@@ -203,24 +199,41 @@ func generateTerraform(qoveryConfigs map[string]interface{}, destination string,
 		qoveryTerraformDocMarkdownJSON, err = json.Marshal(qoveryTerraformDocMarkdown)
 
 		if err != nil {
-			return "", "", "", fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
+			return nil, fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
 		}
 	}
 
-	prompt := fmt.Sprintf(`Output instructions:
+	var generatedTerraformFiles []GeneratedTerraform
+	for appName, qoveryConfigValue := range qoveryConfigs {
+		// the idea here is to generate the Terraform configuration for each app in the Qovery configuration
+		// to avoid having a prompt exceeding the model input token size.
+		// This way we can generate the Terraform configuration for each app separately and then merge them into a single file.
+		// and then merge them into a single file.
+		qoveryConfigValueJSON, err := json.Marshal(qoveryConfigValue)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling Qovery config: %w", err)
+		}
+
+		prompt := fmt.Sprintf(`OUTPUT INSTRUCTIONS THAT MUST BE FOLLOWED:
+- Provide just the Terraform configuration that you would generate for the following app.
+- The configuration should be in the HCL format.
+- The configuration should be valid and able to be applied with Terraform.
+- The cluster and environment resources are not required in the configuration. Export the cluster and environment ids as variables.
+
+OUTPUT FORMAT INSTRUCTIONS TO FOLLOW:
 Provide two separate configurations
-1. A main.tf file containing the full Terraform configuration for all apps.
-2. A variables.tf file containing the Qovery API token and the necessary credentials for the %s cloud provider.
-Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else. No introduction our final sentences.
+1. A main.tf file containing the Terraform configuration for the app.
+2. A variables.tf file containing the variables for the main.tf file.
+Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else. No introduction our final sentences because I will parse the output.
 
-Generate a consolidated Terraform configuration for Qovery that includes all of the following apps:
+GENERATE A CONSOLIDATED TERRAFORM CONFIGURATION FOR QOVERY THAT INCLUDES ALL OF THE FOLLOWING APPS:
 %s
 
-The configuration should be for the %s cloud provider.
-Use the following Terraform examples as reference:
+THE CONFIGURATION MUST BE FOR THE %s CLOUD PROVIDER.
+USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE:
 %s
 
-Additional instructions:
+ADDITIONAL INSTRUCTIONS:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
 - Export secrets or sensitive information from the main.tf file into the variables.tf with no default value.
 - If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.
@@ -231,26 +244,49 @@ Additional instructions:
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - Try to optimize the Terraform configuration as much as possible.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
-%s`, destination, string(configJSON), destination, string(examplesJSON), string(qoveryTerraformDocMarkdownJSON))
+%s`, string(qoveryConfigValueJSON), destination, string(examplesJSON), string(qoveryTerraformDocMarkdownJSON))
 
-	response, err := claudeClient.Messages(prompt)
-	if err != nil {
-		return "", "", prompt, fmt.Errorf("error generating Terraform configs: %w", err)
+		response, err := claudeClient.Messages(prompt)
+		if err != nil {
+			generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
+				AppName: appName,
+				Prompt:  prompt,
+			})
+
+			return generatedTerraformFiles, fmt.Errorf("error generating Terraform configs: %w", err)
+		}
+
+		mainTf, variablesTf, err := parseTerraformResponse(response)
+
+		if err != nil {
+			generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
+				AppName: appName,
+				Prompt:  prompt,
+			})
+
+			return generatedTerraformFiles, err
+		}
+
+		// Validate the Terraform configuration
+		finalMainTf, err := validateTerraform(mainTf, variablesTf, claudeClient)
+		if err != nil {
+			generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
+				AppName: appName,
+				Prompt:  prompt,
+			})
+
+			return generatedTerraformFiles, fmt.Errorf("error validating Terraform configuration: %w", err)
+		}
+
+		generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
+			AppName:     appName,
+			MainTf:      finalMainTf,
+			VariablesTf: variablesTf,
+			Prompt:      prompt,
+		})
 	}
 
-	mainTf, variablesTf, err := parseTerraformResponse(response)
-
-	if err != nil {
-		return "", "", prompt, err
-	}
-
-	// Validate the Terraform configuration
-	finalMainTf, err := validateTerraform(mainTf, variablesTf, claudeClient)
-	if err != nil {
-		return "", "", prompt, fmt.Errorf("error validating Terraform configuration: %w", err)
-	}
-
-	return finalMainTf, variablesTf, prompt, nil
+	return generatedTerraformFiles, nil
 }
 
 // EstimateWorkloadCosts estimates the costs of running the workload and provides a comparison report
@@ -520,21 +556,31 @@ func WriteAssets(outputDir string, assets *Assets, writePrompts bool) error {
 		return fmt.Errorf("error writing README.md: %w", err)
 	}
 
-	// Write Terraform main configuration
-	if err := writeToFile(filepath.Join(outputDir, "main.tf"), assets.TerraformMain); err != nil {
-		return fmt.Errorf("error writing main.tf: %w", err)
-	}
+	// Write Terraform files for each app in their own directory
+	for _, generatedTf := range assets.GeneratedTerraformFiles {
+		appDir := filepath.Join(outputDir, generatedTf.SanitizeAppName())
+		if err := os.MkdirAll(appDir, 0755); err != nil {
+			return fmt.Errorf("error creating app directory: %w", err)
+		}
 
-	// Write Terraform variables
-	if err := writeToFile(filepath.Join(outputDir, "variables.tf"), assets.TerraformVariables); err != nil {
-		return fmt.Errorf("error writing variables.tf: %w", err)
-	}
+		// Write main.tf
+		if err := writeToFile(filepath.Join(appDir, "main.tf"), generatedTf.MainTf); err != nil {
+			return fmt.Errorf("error writing main.tf: %w", err)
+		}
 
-	// Write Dockerfiles
-	for _, dockerfile := range assets.Dockerfiles {
-		filename := fmt.Sprintf("Dockerfile-%s", dockerfile.AppName)
-		if err := writeToFile(filepath.Join(outputDir, filename), dockerfile.DockerfileContent); err != nil {
-			return fmt.Errorf("error writing %s: %w", filename, err)
+		// Write variables.tf
+		if err := writeToFile(filepath.Join(appDir, "variables.tf"), generatedTf.VariablesTf); err != nil {
+			return fmt.Errorf("error writing variables.tf: %w", err)
+		}
+
+		// check if the app has a dockerfile associated
+		for _, dockerfile := range assets.Dockerfiles {
+			if dockerfile.AppName == generatedTf.AppName {
+				// Write Dockerfile
+				if err := writeToFile(filepath.Join(appDir, "Dockerfile"), dockerfile.DockerfileContent); err != nil {
+					return fmt.Errorf("error writing Dockerfile: %w", err)
+				}
+			}
 		}
 	}
 
@@ -544,15 +590,27 @@ func WriteAssets(outputDir string, assets *Assets, writePrompts bool) error {
 	}
 
 	if writePrompts {
-		// Write prompts into JSON file
-		promptsJSON, err := json.Marshal(assets.Prompts)
+		// Write generated terraform files with Prompts into JSON file
+		generatedTfFilesWithPromptsJSON, err := json.Marshal(assets.GeneratedTerraformFiles)
 		if err != nil {
 			return fmt.Errorf("error marshaling prompts: %w", err)
 		}
 
-		if err := writeToFile(filepath.Join(outputDir, "prompts.json"), string(promptsJSON)); err != nil {
-			return fmt.Errorf("error writing prompts.json: %w", err)
+		if err := writeToFile(filepath.Join(outputDir, "generated_tf_files_with_prompts.json"), string(generatedTfFilesWithPromptsJSON)); err != nil {
+			return fmt.Errorf("error writing generated_tf_files_with_prompts.json: %w", err)
 		}
+
+		// Write Dockerfiles with Prompts into JSON file
+		dockerfilesWithPromptsJSON, err := json.Marshal(assets.Dockerfiles)
+		if err != nil {
+			return fmt.Errorf("error marshaling prompts: %w", err)
+		}
+
+		if err := writeToFile(filepath.Join(outputDir, "dockerfiles_with_prompts.json"), string(dockerfilesWithPromptsJSON)); err != nil {
+			return fmt.Errorf("error writing dockerfiles_with_prompts.json: %w", err)
+		}
+
+		// TODO cost estimation prompts
 	}
 
 	return nil
