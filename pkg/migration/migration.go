@@ -214,20 +214,42 @@ func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination st
 			return nil, fmt.Errorf("error marshaling Qovery config: %w", err)
 		}
 
-		prompt := fmt.Sprintf(`OUTPUT FORMAT INSTRUCTIONS TO FOLLOW:
+		prompt := fmt.Sprintf(`CONTEXT:
+This function must return the Terraform configuration main.tf and variables.tf that will be used to deploy the application with Qovery.
+
+OUTPUT FORMAT REQUIREMENTS:
 Provide two separate configurations
 1. A main.tf file containing the Terraform configuration for the app.
 2. A variables.tf file containing the variables for the main.tf file.
 Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else. No introduction our final sentences because I will parse the output.
 
-GENERATE A CONSOLIDATED TERRAFORM CONFIGURATION FOR QOVERY THAT INCLUDES ALL OF THE FOLLOWING APPS:
+Example of the output:
+(terraform {
+  required_providers {
+    qovery = {
+      source = "qovery/qovery"
+    }
+  }
+}
+
+provider "qovery" {
+  token = var.qovery_access_token
+}|||variable "qovery_access_token" {
+  type        = string
+  description = "Qovery API access token"
+}
+
+variable "environment_id" {
+  type        = string
+  description = "Qovery environment ID"
+})
+
+So my parser function in Golang can parse the output and extract the two strings.
+
+GENERATE A CONSOLIDATED TERRAFORM CONFIGURATION FOR QOVERY THAT INCLUDE THE FOLLOWING APP AND THE DEPENDENCIES (DATABASES, SERVICES, ETC):
 %s
 
-THE CONFIGURATION MUST BE FOR THE %s CLOUD PROVIDER.
-USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE:
-%s
-
-ADDITIONAL INSTRUCTIONS:
+TERRAFORM GENERATION INSTRUCTIONS:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
 - Export secrets or sensitive information (included URI) from the main.tf file into the variables.tf with no default value.
 - If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.
@@ -239,7 +261,10 @@ ADDITIONAL INSTRUCTIONS:
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - Try to optimize the Terraform configuration as much as possible.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
-%s`, string(qoveryConfigValueJSON), destination, string(examplesJSON), string(qoveryTerraformDocMarkdownJSON))
+%s
+
+USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
+%s`, string(qoveryConfigValueJSON), string(qoveryTerraformDocMarkdownJSON), string(examplesJSON))
 
 		response, err := claudeClient.Messages(prompt)
 		if err != nil {
