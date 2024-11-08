@@ -214,13 +214,7 @@ func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination st
 			return nil, fmt.Errorf("error marshaling Qovery config: %w", err)
 		}
 
-		prompt := fmt.Sprintf(`OUTPUT INSTRUCTIONS THAT MUST BE FOLLOWED:
-- Provide just the Terraform configuration that you would generate for the following app.
-- The configuration should be in the HCL format.
-- The configuration should be valid and able to be applied with Terraform.
-- The cluster and environment resources are not required in the configuration. Export the cluster and environment ids as variables.
-
-OUTPUT FORMAT INSTRUCTIONS TO FOLLOW:
+		prompt := fmt.Sprintf(`OUTPUT FORMAT INSTRUCTIONS TO FOLLOW:
 Provide two separate configurations
 1. A main.tf file containing the Terraform configuration for the app.
 2. A variables.tf file containing the variables for the main.tf file.
@@ -235,12 +229,13 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE:
 
 ADDITIONAL INSTRUCTIONS:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
-- Export secrets or sensitive information from the main.tf file into the variables.tf with no default value.
+- Export secrets or sensitive information (included URI) from the main.tf file into the variables.tf with no default value.
 - If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.
 - If an application to another application via the environment variables, make sure to use the "environment_variable_aliases" from the Qovery Terraform Provider resource (if available. cf doc).
 - If in the service you see an application that can be provided by a container image from the DockerHub, use the "container_image" from the Qovery Terraform Provider resource (if available. cf doc).
 - If the configuration has different pipelines/stages/environments, make sure to create different Qovery environments for each set of services/applications/databases.
 - If some services use the "review app" then turn on the preview environment for them with Qoverys's Terraform Provider.
+- The cluster and environment resources are not required in the configuration. Export the cluster and environment ids as variables.
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - Try to optimize the Terraform configuration as much as possible.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:

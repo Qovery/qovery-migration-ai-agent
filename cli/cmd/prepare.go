@@ -125,14 +125,23 @@ func runPrepare(cmd *cobra.Command, args []string) {
 	}
 
 	// Output the generated assets to stdout
-	fmt.Println("\nTerraform Main Configuration:")
-	fmt.Println(assets.TerraformMain)
-	fmt.Println("\nTerraform Variables:")
-	fmt.Println(assets.TerraformVariables)
-	fmt.Println("\nDockerfiles:")
-	for _, dockerfile := range assets.Dockerfiles {
-		fmt.Printf("App: %s\n", dockerfile.AppName)
-		fmt.Println(dockerfile.DockerfileContent)
-		fmt.Println("---")
+	for _, generatedTfFile := range assets.GeneratedTerraformFiles {
+		fmt.Println("====================================")
+		fmt.Println(generatedTfFile.AppName)
+		fmt.Println("====================================")
+
+		fmt.Println("\nTerraform Main Configuration:")
+		fmt.Println(generatedTfFile.MainTf)
+
+		fmt.Println("\nTerraform Variables:")
+		fmt.Println(generatedTfFile.AppName)
+
+		// output Dockerfile content if it exists
+		for _, dockerfile := range assets.Dockerfiles {
+			if dockerfile.AppName == generatedTfFile.AppName {
+				fmt.Println(dockerfile.DockerfileContent)
+				break
+			}
+		}
 	}
 }
