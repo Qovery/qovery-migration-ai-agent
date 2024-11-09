@@ -515,7 +515,67 @@ func validateTerraform(originalMainManifest string, originalVariablesManifest st
 		initOutput, err := initCmd.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Terraform init failed: %s\n", initOutput)
-			return "", fmt.Errorf("terraform init failed: %w", err)
+
+			// Read the current Terraform files
+			mainContent, err := ioutil.ReadFile(tfFilePath)
+			if err != nil {
+				return "", fmt.Errorf("error reading main Terraform file: %w", err)
+			}
+
+			varsContent, err := ioutil.ReadFile(tfVarFilePath)
+			if err != nil {
+				return "", fmt.Errorf("error reading variables Terraform file: %w", err)
+			}
+
+			// Prepare the prompt for Claude to fix init errors
+			prompt := fmt.Sprintf(`The following Terraform configuration failed during initialization:
+
+Main Terraform file (main.tf):
+%s
+
+Variables file (variables.tf):
+%s
+
+The initialization error is:
+%s
+
+Please fix the Terraform configuration to resolve these initialization errors. Focus on issues like:
+- Missing or incorrect provider configurations
+- Invalid backend configurations
+- Module source problems
+- Version constraints
+
+Provide only the corrected Terraform code for both files without any explanations. Start the main.tf content with ### MAIN.TF ### and the variables.tf content with ### VARIABLES.TF ###`, mainContent, varsContent, initOutput)
+
+			// Delay before retrying
+			time.Sleep(3 * time.Second)
+
+			// Get Claude's response
+			correctedConfig, err := claudeClient.Messages(prompt)
+			if err != nil {
+				return "", fmt.Errorf("error getting response from Claude: %w", err)
+			}
+
+			// Split the response into main.tf and variables.tf content
+			parts := strings.Split(correctedConfig, "### VARIABLES.TF ###")
+			if len(parts) != 2 {
+				return "", fmt.Errorf("invalid response format from Claude")
+			}
+
+			mainContent = []byte(strings.TrimPrefix(parts[0], "### MAIN.TF ###"))
+			varsContent = []byte(parts[1])
+
+			// Write the corrected Terraform files
+			if err := ioutil.WriteFile(tfFilePath, []byte(mainContent), 0644); err != nil {
+				return "", fmt.Errorf("error writing corrected main.tf: %w", err)
+			}
+
+			if err := ioutil.WriteFile(tfVarFilePath, []byte(varsContent), 0644); err != nil {
+				return "", fmt.Errorf("error writing corrected variables.tf: %w", err)
+			}
+
+			fmt.Println("Applied initialization corrections from Claude. Retrying...")
+			continue
 		}
 
 		// Run terraform validate
@@ -542,7 +602,7 @@ The validation error is:
 
 Please fix the Terraform configuration to resolve these errors. Provide only the corrected Terraform code without any explanations.`, tfContent, output)
 
-			// Delay a bit before retrying
+			// Delay before retrying
 			time.Sleep(3 * time.Second)
 
 			// Get Claude's response
@@ -557,7 +617,7 @@ Please fix the Terraform configuration to resolve these errors. Provide only the
 				return "", fmt.Errorf("error writing corrected Terraform: %w", err)
 			}
 
-			fmt.Println("Applied corrections from Claude. Retrying validation...")
+			fmt.Println("Applied validation corrections from Claude. Retrying...")
 		} else {
 			// Read and return the final valid Terraform manifest
 			finalManifest, err := ioutil.ReadFile(tfFilePath)
