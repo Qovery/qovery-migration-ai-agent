@@ -251,7 +251,7 @@ GENERATE A CONSOLIDATED TERRAFORM CONFIGURATION FOR QOVERY THAT INCLUDE THE FOLL
 
 TERRAFORM GENERATION INSTRUCTIONS:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
-- Export secrets or sensitive information (included URI) from the main.tf file into the variables.tf with no default value.
+- Export secrets or sensitive information (E.g environment variable key with name containaing SECRET, KEY, URI, TOKEN, and every value that looks like a secret) from the main.tf file into the variables.tf with no default value.
 - If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.
 - If an application to another application via the environment variables, make sure to use the "environment_variable_aliases" from the Qovery Terraform Provider resource (if available. cf doc).
 - If in the service you see an application that can be provided by a container image from the DockerHub, use the "container_image" from the Qovery Terraform Provider resource (if available. cf doc).
@@ -456,26 +456,33 @@ func loadMarkdownFiles(owner, repo, branch, token string) (map[string]string, er
 // parseTerraformResponse parses the Claude AI response for Terraform configurations
 func parseTerraformResponse(response string) (string, string, error) {
 	response = strings.TrimSpace(response)
-	if !strings.HasPrefix(response, "(") || !strings.HasSuffix(response, ")") {
-		return "", "", fmt.Errorf("invalid response format")
+
+	// Find the content between the first '(' and last ')'
+	startIdx := strings.Index(response, "(")
+	endIdx := strings.LastIndex(response, ")")
+
+	if startIdx == -1 || endIdx == -1 || startIdx >= endIdx {
+		return "", "", fmt.Errorf("could not find matching parentheses in response")
 	}
 
-	content := response[1 : len(response)-1]
+	// Extract content between parentheses
+	content := response[startIdx+1 : endIdx]
 
+	// Split the content by the delimiter
 	parts := strings.SplitN(content, "|||", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("ParseTerraformResponse invalid response format")
+		return "", "", fmt.Errorf("invalid response format: missing delimiter '|||'")
 	}
 
-	// trim leading and trailing whitespace
-	parts[0] = strings.TrimSpace(parts[0])
-	parts[1] = strings.TrimSpace(parts[1])
+	// Clean up each part
+	mainTf := strings.TrimSpace(parts[0])
+	variablesTf := strings.TrimSpace(parts[1])
 
-	// Remove the leading and trailing quotes
-	parts[0] = strings.Trim(parts[0], "\"")
-	parts[1] = strings.Trim(parts[1], "\"")
+	// Remove any quotes that might be present
+	mainTf = strings.Trim(mainTf, "\"")
+	variablesTf = strings.Trim(variablesTf, "\"")
 
-	return parts[0], parts[1], nil
+	return mainTf, variablesTf, nil
 }
 
 // ValidateTerraform takes an original Terraform manifest, validates it, and returns the final valid manifest or an error
