@@ -23,6 +23,7 @@ func main() {
 		BedrockAccessKeyId:     os.Getenv("BEDROCK_ACCESS_KEY"),
 		BedrockSecretAccessKey: os.Getenv("BEDROCK_SECRET_KEY"),
 		BedrockRegion:          os.Getenv("BEDROCK_REGION"),
+		BedrockModelArn:        os.Getenv("BEDROCK_MODEL_ARN"),
 	}
 
 	r := gin.Default()

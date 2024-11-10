@@ -26,6 +26,7 @@ type Config struct {
 	BedrockAccessKeyId     string
 	BedrockSecretAccessKey string
 	BedrockRegion          string
+	BedrockModelArn        string
 }
 
 type HerokuMigrationRequest struct {
@@ -66,6 +67,7 @@ func HerokuMigrateHandler(config Config) gin.HandlerFunc {
 		// Create Bedrock client configuration
 		bedrockClientConfig := bedrock.DefaultConfig()
 		bedrockClientConfig.AWSRegion = config.BedrockRegion
+		bedrockClientConfig.InferenceProfileARN = config.BedrockModelArn
 
 		// Use your Go library to generate Terraform manifests and Dockerfiles
 		assets, err := migration.GenerateHerokuMigrationAssets(
