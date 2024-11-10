@@ -361,7 +361,7 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 
 // EstimateWorkloadCosts estimates the costs of running the workload and provides a comparison report
 func EstimateWorkloadCosts(mainTfContent string, currentCosts float64, bedrockClient *bedrock.BedrockClient) (string, string, error) {
-	// Prepare the prompt for Claude
+	// Prepare the prompt for Bedrock
 	prompt := fmt.Sprintf(`Given the following Terraform configuration for Qovery:
 
 %s
@@ -406,10 +406,10 @@ Provide a comprehensive report that a decision-maker could use to determine if m
 Important for the report: use as much as possible tables for the comparison and make it easy to read.
 `, mainTfContent, currentCosts)
 
-	// Get Claude's response
+	// Get Bedrock's response
 	response, err := bedrockClient.Messages(prompt)
 	if err != nil {
-		return "", prompt, fmt.Errorf("error getting response from Claude: %w", err)
+		return "", prompt, fmt.Errorf("error getting response from Bedrock: %w", err)
 	}
 
 	// Append contact information
@@ -503,7 +503,7 @@ func loadMarkdownFiles(owner, repo, branch, token string) (map[string]string, er
 	return result, nil
 }
 
-// parseTerraformResponse parses the Claude AI response for Terraform configurations
+// parseTerraformResponse parses the Bedrock response for Terraform configurations
 func parseTerraformResponse(response string) (string, string, error) {
 	response = strings.TrimSpace(response)
 
@@ -577,22 +577,26 @@ func validateTerraform(originalMainManifest string, originalVariablesManifest st
 				return "", "", fmt.Errorf("error reading variables.tf file: %w", err)
 			}
 
-			// First prompt for main.tf fixes
+			// First prompt for main.tf fixes, including variables.tf content
 			mainPrompt := fmt.Sprintf(`The following Terraform configuration failed during initialization:
 
 Main Terraform file (main.tf):
 %s
 
+Current variables file (variables.tf):
+%s
+
 The initialization error is:
 %s
 
-Please fix the main.tf configuration to resolve these initialization errors. Focus on issues like:
+Please fix the main.tf configuration to resolve these initialization errors while ensuring compatibility with the variables.tf file. Focus on issues like:
 - Missing or incorrect provider configurations
 - Invalid backend configurations
 - Module source problems
 - Version constraints
+- Variable references matching variables.tf declarations
 
-Provide only the corrected main.tf code without any explanations and no formating. Output must look like this:
+Provide only the corrected main.tf code without any explanations and no formatting. Output must look like this:
 terraform {
   required_providers {
     qovery = {
@@ -603,16 +607,24 @@ terraform {
 
 provider "qovery" {
   token = var.qovery_access_token
-}`, mainContent, initOutput)
+}`, mainContent, varsContent, initOutput)
 
 			// Get Bedrock's response for main.tf
 			correctedMain, err := bedrockClient.Messages(mainPrompt)
 			if err != nil {
-				return "", "", fmt.Errorf("error getting response from Claude for main.tf: %w", err)
+				return "", "", fmt.Errorf("error getting response from Bedrock for main.tf: %w", err)
 			}
 
-			// Second prompt for variables.tf fixes
+			// Write the corrected main.tf first
+			if err := ioutil.WriteFile(tfFilePath, []byte(correctedMain), 0644); err != nil {
+				return "", "", fmt.Errorf("error writing corrected main.tf: %w", err)
+			}
+
+			// Second prompt for variables.tf fixes, including the corrected main.tf
 			varsPrompt := fmt.Sprintf(`The following Terraform configuration failed during initialization:
+
+Current main.tf (already corrected):
+%s
 
 Variables file (variables.tf):
 %s
@@ -620,13 +632,13 @@ Variables file (variables.tf):
 The initialization error is:
 %s
 
-Please fix the variables.tf configuration to resolve these initialization errors. Focus on issues like:
-- Variable declarations
+Please fix the variables.tf configuration to resolve these initialization errors while ensuring compatibility with the main.tf file. Focus on issues like:
+- Variable declarations matching those referenced in main.tf
 - Type constraints
 - Default values
 - Variable validation rules
 
-Provide only the corrected variables.tf code without any explanations and no formating. Output must look like this:
+Provide only the corrected variables.tf code without any explanations and no formatting. Output must look like this:
 variable "project_id" {
   type        = string
   description = "The ID of the Qovery project"
@@ -640,24 +652,19 @@ variable "environment_id" {
 variable "application_name" {
   type        = string
   description = "The name of the application"
-}`, varsContent, initOutput)
+}`, correctedMain, varsContent, initOutput)
 
 			// Get Bedrock's response for variables.tf
 			correctedVars, err := bedrockClient.Messages(varsPrompt)
 			if err != nil {
-				return "", "", fmt.Errorf("error getting response from Claude for variables.tf: %w", err)
-			}
-
-			// Write the corrected Terraform files
-			if err := ioutil.WriteFile(tfFilePath, []byte(correctedMain), 0644); err != nil {
-				return "", "", fmt.Errorf("error writing corrected main.tf: %w", err)
+				return "", "", fmt.Errorf("error getting response from Bedrock for variables.tf: %w", err)
 			}
 
 			if err := ioutil.WriteFile(tfVarFilePath, []byte(correctedVars), 0644); err != nil {
 				return "", "", fmt.Errorf("error writing corrected variables.tf: %w", err)
 			}
 
-			fmt.Println("Applied initialization corrections from Claude. Retrying...")
+			fmt.Println("Applied initialization corrections from Bedrock. Retrying...")
 			continue
 		}
 
@@ -680,46 +687,81 @@ variable "application_name" {
 				return "", "", fmt.Errorf("error reading variables.tf file: %w", err)
 			}
 
-			// Separate prompts for validation fixes
-			mainPrompt := fmt.Sprintf(`The following main.tf configuration has validation errors:
+			// Prompt for main.tf validation fixes, including variables.tf
+			mainPrompt := fmt.Sprintf(`The following Terraform configuration has validation errors:
 
+Current main.tf:
+%s
+
+Current variables.tf:
 %s
 
 The validation error is:
 %s
 
-Please fix the main.tf configuration to resolve these errors. Provide only the corrected code without any explanations.`, mainContent, output)
+Please fix the main.tf configuration to resolve these errors while ensuring compatibility with variables.tf. Provide only the corrected code without any explanations. Output must look like this:
+terraform {
+  required_providers {
+    qovery = {
+      source = "qovery/qovery"
+    }
+  }
+}
 
-			varsPrompt := fmt.Sprintf(`The following variables.tf configuration has validation errors:
+provider "qovery" {
+  token = var.qovery_access_token
+}`, mainContent, varsContent, output)
 
-%s
-
-The validation error is:
-%s
-
-Please fix the variables.tf configuration to resolve these errors. Provide only the corrected code without any explanations.`, varsContent, output)
-
-			// Get Claude's responses
+			// Get Bedrock's response for main.tf
 			correctedMain, err := bedrockClient.Messages(mainPrompt)
 			if err != nil {
-				return "", "", fmt.Errorf("error getting response from Claude for main.tf: %w", err)
+				return "", "", fmt.Errorf("error getting response from Bedrock for main.tf: %w", err)
 			}
 
-			correctedVars, err := bedrockClient.Messages(varsPrompt)
-			if err != nil {
-				return "", "", fmt.Errorf("error getting response from Claude for variables.tf: %w", err)
-			}
-
-			// Write the corrected Terraform files
+			// Write the corrected main.tf first
 			if err := ioutil.WriteFile(tfFilePath, []byte(correctedMain), 0644); err != nil {
 				return "", "", fmt.Errorf("error writing corrected main.tf: %w", err)
+			}
+
+			// Prompt for variables.tf validation fixes, including corrected main.tf
+			varsPrompt := fmt.Sprintf(`The following Terraform configuration has validation errors:
+
+Current main.tf (already corrected):
+%s
+
+Current variables.tf:
+%s
+
+The validation error is:
+%s
+
+Please fix the variables.tf configuration to resolve these errors while ensuring compatibility with main.tf. Provide only the corrected code without any explanations. Output must look like this:
+variable "project_id" {
+  type        = string
+  description = "The ID of the Qovery project"
+}
+
+variable "environment_id" {
+  type        = string
+  description = "The ID of the Qovery environment"
+}
+
+variable "application_name" {
+  type        = string
+  description = "The name of the application"
+}`, correctedMain, varsContent, output)
+
+			// Get Bedrock's response for variables.tf
+			correctedVars, err := bedrockClient.Messages(varsPrompt)
+			if err != nil {
+				return "", "", fmt.Errorf("error getting response from Bedrock for variables.tf: %w", err)
 			}
 
 			if err := ioutil.WriteFile(tfVarFilePath, []byte(correctedVars), 0644); err != nil {
 				return "", "", fmt.Errorf("error writing corrected variables.tf: %w", err)
 			}
 
-			fmt.Println("Applied validation corrections from Claude. Retrying...")
+			fmt.Println("Applied validation corrections from Bedrock. Retrying...")
 		} else {
 			// Read and return both final valid Terraform manifests
 			finalMain, err := ioutil.ReadFile(tfFilePath)
