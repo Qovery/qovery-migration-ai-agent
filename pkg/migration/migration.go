@@ -2,22 +2,20 @@ package migration
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/bedrock"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/sources"
+	"github.com/google/go-github/v39/github"
+	"golang.org/x/oauth2"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
-
-	_ "embed"
-	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
-	"github.com/google/go-github/v39/github"
-	"golang.org/x/oauth2"
 )
 
 //go:embed _readme.md
@@ -538,23 +536,23 @@ func parseTerraformResponse(response string) (string, string, error) {
 }
 
 // ValidateTerraform takes an original Terraform manifest, validates it, and returns the final valid manifest or an error
-func validateTerraform(originalMainManifest string, originalVariablesManifest string, bedrockClient *bedrock.BedrockClient) (string, error) {
+func validateTerraform(originalMainManifest string, originalVariablesManifest string, bedrockClient *bedrock.BedrockClient) (string, string, error) {
 	// Create a temporary directory for Terraform files
 	tempDir, err := ioutil.TempDir("", "terraform-validate")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
+		return "", "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Write the original manifest to a file in the temp directory
+	// Write the original manifests to files in the temp directory
 	tfFilePath := filepath.Join(tempDir, "main.tf")
 	if err := ioutil.WriteFile(tfFilePath, []byte(originalMainManifest), 0644); err != nil {
-		return "", fmt.Errorf("failed to write Terraform file: %w", err)
+		return "", "", fmt.Errorf("failed to write main.tf file: %w", err)
 	}
 
 	tfVarFilePath := filepath.Join(tempDir, "variables.tf")
 	if err := ioutil.WriteFile(tfVarFilePath, []byte(originalVariablesManifest), 0644); err != nil {
-		return "", fmt.Errorf("failed to write Terraform file: %w", err)
+		return "", "", fmt.Errorf("failed to write variables.tf file: %w", err)
 	}
 
 	maxIterations := 10
@@ -571,19 +569,39 @@ func validateTerraform(originalMainManifest string, originalVariablesManifest st
 			// Read the current Terraform files
 			mainContent, err := ioutil.ReadFile(tfFilePath)
 			if err != nil {
-				return "", fmt.Errorf("error reading main Terraform file: %w", err)
+				return "", "", fmt.Errorf("error reading main.tf file: %w", err)
 			}
 
 			varsContent, err := ioutil.ReadFile(tfVarFilePath)
 			if err != nil {
-				return "", fmt.Errorf("error reading variables Terraform file: %w", err)
+				return "", "", fmt.Errorf("error reading variables.tf file: %w", err)
 			}
 
-			// Prepare the prompt for Claude to fix init errors
-			prompt := fmt.Sprintf(`The following Terraform configuration failed during initialization:
+			// First prompt for main.tf fixes
+			mainPrompt := fmt.Sprintf(`The following Terraform configuration failed during initialization:
 
 Main Terraform file (main.tf):
 %s
+
+The initialization error is:
+%s
+
+Please fix the main.tf configuration to resolve these initialization errors. Focus on issues like:
+- Missing or incorrect provider configurations
+- Invalid backend configurations
+- Module source problems
+- Version constraints
+
+Provide only the corrected main.tf code without any explanations.`, mainContent, initOutput)
+
+			// Get Bedrock's response for main.tf
+			correctedMain, err := bedrockClient.Messages(mainPrompt)
+			if err != nil {
+				return "", "", fmt.Errorf("error getting response from Claude for main.tf: %w", err)
+			}
+
+			// Second prompt for variables.tf fixes
+			varsPrompt := fmt.Sprintf(`The following Terraform configuration failed during initialization:
 
 Variables file (variables.tf):
 %s
@@ -591,39 +609,27 @@ Variables file (variables.tf):
 The initialization error is:
 %s
 
-Please fix the Terraform configuration to resolve these initialization errors. Focus on issues like:
-- Missing or incorrect provider configurations
-- Invalid backend configurations
-- Module source problems
-- Version constraints
+Please fix the variables.tf configuration to resolve these initialization errors. Focus on issues like:
+- Variable declarations
+- Type constraints
+- Default values
+- Variable validation rules
 
-Provide only the corrected Terraform code for both files without any explanations. Start the main.tf content with ### MAIN.TF ### and the variables.tf content with ### VARIABLES.TF ###`, mainContent, varsContent, initOutput)
+Provide only the corrected variables.tf code without any explanations.`, varsContent, initOutput)
 
-			// Delay before retrying
-			time.Sleep(3 * time.Second)
-
-			// Get Claude's response
-			correctedConfig, err := bedrockClient.Messages(prompt)
+			// Get Bedrock's response for variables.tf
+			correctedVars, err := bedrockClient.Messages(varsPrompt)
 			if err != nil {
-				return "", fmt.Errorf("error getting response from Claude: %w", err)
+				return "", "", fmt.Errorf("error getting response from Claude for variables.tf: %w", err)
 			}
-
-			// Split the response into main.tf and variables.tf content
-			parts := strings.Split(correctedConfig, "### VARIABLES.TF ###")
-			if len(parts) != 2 {
-				return "", fmt.Errorf("invalid response format from Claude")
-			}
-
-			mainContent = []byte(strings.TrimPrefix(parts[0], "### MAIN.TF ###"))
-			varsContent = []byte(parts[1])
 
 			// Write the corrected Terraform files
-			if err := ioutil.WriteFile(tfFilePath, []byte(mainContent), 0644); err != nil {
-				return "", fmt.Errorf("error writing corrected main.tf: %w", err)
+			if err := ioutil.WriteFile(tfFilePath, []byte(correctedMain), 0644); err != nil {
+				return "", "", fmt.Errorf("error writing corrected main.tf: %w", err)
 			}
 
-			if err := ioutil.WriteFile(tfVarFilePath, []byte(varsContent), 0644); err != nil {
-				return "", fmt.Errorf("error writing corrected variables.tf: %w", err)
+			if err := ioutil.WriteFile(tfVarFilePath, []byte(correctedVars), 0644); err != nil {
+				return "", "", fmt.Errorf("error writing corrected variables.tf: %w", err)
 			}
 
 			fmt.Println("Applied initialization corrections from Claude. Retrying...")
@@ -638,49 +644,74 @@ Provide only the corrected Terraform code for both files without any explanation
 		if err != nil {
 			fmt.Printf("Terraform validation failed: %s\n", output)
 
-			// Read the current Terraform file
-			tfContent, err := ioutil.ReadFile(tfFilePath)
+			// Read the current Terraform files
+			mainContent, err := ioutil.ReadFile(tfFilePath)
 			if err != nil {
-				return "", fmt.Errorf("error reading Terraform file: %w", err)
+				return "", "", fmt.Errorf("error reading main.tf file: %w", err)
 			}
 
-			// Prepare the prompt for Claude
-			prompt := fmt.Sprintf(`The following Terraform configuration has validation errors:
+			varsContent, err := ioutil.ReadFile(tfVarFilePath)
+			if err != nil {
+				return "", "", fmt.Errorf("error reading variables.tf file: %w", err)
+			}
+
+			// Separate prompts for validation fixes
+			mainPrompt := fmt.Sprintf(`The following main.tf configuration has validation errors:
 
 %s
 
 The validation error is:
 %s
 
-Please fix the Terraform configuration to resolve these errors. Provide only the corrected Terraform code without any explanations.`, tfContent, output)
+Please fix the main.tf configuration to resolve these errors. Provide only the corrected code without any explanations.`, mainContent, output)
 
-			// Delay before retrying
-			time.Sleep(3 * time.Second)
+			varsPrompt := fmt.Sprintf(`The following variables.tf configuration has validation errors:
 
-			// Get Claude's response
-			correctedTF, err := bedrockClient.Messages(prompt)
+%s
+
+The validation error is:
+%s
+
+Please fix the variables.tf configuration to resolve these errors. Provide only the corrected code without any explanations.`, varsContent, output)
+
+			// Get Claude's responses
+			correctedMain, err := bedrockClient.Messages(mainPrompt)
 			if err != nil {
-				return "", fmt.Errorf("error getting response from Claude: %w", err)
+				return "", "", fmt.Errorf("error getting response from Claude for main.tf: %w", err)
 			}
 
-			// Write the corrected Terraform to file
-			err = ioutil.WriteFile(tfFilePath, []byte(correctedTF), 0644)
+			correctedVars, err := bedrockClient.Messages(varsPrompt)
 			if err != nil {
-				return "", fmt.Errorf("error writing corrected Terraform: %w", err)
+				return "", "", fmt.Errorf("error getting response from Claude for variables.tf: %w", err)
+			}
+
+			// Write the corrected Terraform files
+			if err := ioutil.WriteFile(tfFilePath, []byte(correctedMain), 0644); err != nil {
+				return "", "", fmt.Errorf("error writing corrected main.tf: %w", err)
+			}
+
+			if err := ioutil.WriteFile(tfVarFilePath, []byte(correctedVars), 0644); err != nil {
+				return "", "", fmt.Errorf("error writing corrected variables.tf: %w", err)
 			}
 
 			fmt.Println("Applied validation corrections from Claude. Retrying...")
 		} else {
-			// Read and return the final valid Terraform manifest
-			finalManifest, err := ioutil.ReadFile(tfFilePath)
+			// Read and return both final valid Terraform manifests
+			finalMain, err := ioutil.ReadFile(tfFilePath)
 			if err != nil {
-				return "", fmt.Errorf("error reading final Terraform manifest: %w", err)
+				return "", "", fmt.Errorf("error reading final main.tf manifest: %w", err)
 			}
-			return string(finalManifest), nil
+
+			finalVars, err := ioutil.ReadFile(tfVarFilePath)
+			if err != nil {
+				return "", "", fmt.Errorf("error reading final variables.tf manifest: %w", err)
+			}
+
+			return string(finalMain), string(finalVars), nil
 		}
 	}
 
-	return "", fmt.Errorf("exceeded maximum iterations (%d) without achieving a valid Terraform configuration", maxIterations)
+	return "", "", fmt.Errorf("exceeded maximum iterations (%d) without achieving a valid Terraform configuration", maxIterations)
 }
 
 // WriteAssets writes the generated assets to the output directory
