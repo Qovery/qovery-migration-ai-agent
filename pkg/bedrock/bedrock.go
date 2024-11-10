@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,7 +77,7 @@ type BedrockClient struct {
 	bedrockClient *bedrockruntime.Client
 	rateLimiter   *RateLimiter
 	config        ClientConfig
-	semaphore     chan struct{} // Added for parallel request limiting
+	semaphore     chan struct{}
 }
 
 // ClientConfig holds configuration options for the Bedrock client
@@ -206,25 +207,35 @@ func (c *BedrockClient) Messages(prompt string) (string, error) {
 		if err != nil {
 			c.rateLimiter.release()
 
+			// Handle different types of errors that should trigger retries
 			var apiErr smithy.APIError
-			if ok := errors.As(err, &apiErr); ok {
-				switch apiErr.ErrorCode() {
-				case "ThrottlingException", "ServiceUnavailable", "InternalServerError":
-					if attempt < c.config.MaxRetries-1 {
-						jitter := time.Duration(rand.Int63n(int64(retryDelay) / 2))
-						sleepTime := retryDelay + jitter
+			if errors.As(err, &apiErr) {
+				errorCode := apiErr.ErrorCode()
+				errorMessage := apiErr.Error()
 
-						if sleepTime > c.config.MaxRetryDelay {
-							sleepTime = c.config.MaxRetryDelay
-						}
+				// Check for specific error conditions that warrant a retry
+				shouldRetry := errorCode == "ThrottlingException" ||
+					errorCode == "ServiceUnavailable" ||
+					errorCode == "InternalServerError" ||
+					strings.Contains(errorMessage, "503") ||
+					strings.Contains(errorMessage, "ServiceUnavailableException") ||
+					strings.Contains(errorMessage, "Model is getting throttled")
 
-						log.Printf("Request failed with error %s. Retrying in %v (attempt %d/%d)",
-							apiErr.ErrorCode(), sleepTime, attempt+1, c.config.MaxRetries)
+				if shouldRetry && attempt < c.config.MaxRetries-1 {
+					// Calculate retry delay with jitter
+					jitter := time.Duration(rand.Int63n(int64(retryDelay) / 2))
+					sleepTime := retryDelay + jitter
 
-						time.Sleep(sleepTime)
-						retryDelay *= 2 // Exponential backoff
-						continue
+					if sleepTime > c.config.MaxRetryDelay {
+						sleepTime = c.config.MaxRetryDelay
 					}
+
+					log.Printf("Request failed with error: %s. Error message: %s. Retrying in %v (attempt %d/%d)",
+						errorCode, errorMessage, sleepTime, attempt+1, c.config.MaxRetries)
+
+					time.Sleep(sleepTime)
+					retryDelay *= 2 // Exponential backoff
+					continue
 				}
 			}
 			return "", fmt.Errorf("error invoking model: %w", err)

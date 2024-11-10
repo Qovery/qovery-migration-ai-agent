@@ -3,7 +3,7 @@ module qovery-ai-migration
 go 1.22.5
 
 require (
-	github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110141722-197bf7dc355a
+	github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110143627-c68776a599d8
 	github.com/joho/godotenv v1.5.1
 	github.com/schollz/progressbar/v3 v3.14.6
 	github.com/spf13/cobra v1.8.1
