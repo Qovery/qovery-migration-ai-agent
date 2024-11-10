@@ -164,7 +164,7 @@ func (c *BedrockClient) Messages(prompt string) (string, error) {
 
 		// Create Bedrock API request
 		input := &bedrockruntime.InvokeModelInput{
-			ModelId:     aws.String("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+			ModelId:     aws.String("anthropic.claude-3-5-sonnet-20240620-v1:0"),
 			Accept:      aws.String("application/json"),
 			ContentType: aws.String("application/json"),
 			Body:        jsonPayload,
