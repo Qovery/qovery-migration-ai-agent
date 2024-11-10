@@ -76,14 +76,15 @@ func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, qov
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
 	progressChan <- ProgressUpdate{Stage: "Processing configs", Progress: 0.3}
 
-	var qoveryConfigs = make(map[string]interface{})
 	totalApps := len(configs)
 
 	// Create channels for collecting results and errors
 	type dockerfileResult struct {
-		dockerfile Dockerfile
-		err        error
-		index      int
+		dockerfile   Dockerfile
+		qoveryConfig map[string]interface{}
+		appName      string
+		err          error
+		index        int
 	}
 	resultChan := make(chan dockerfileResult, totalApps)
 
@@ -96,14 +97,6 @@ func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, qov
 
 			appName := app.Name()
 			qoveryConfig := qoveryProvider.TranslateConfig(appName, app.Map(), destination)
-
-			// Use mutex to safely write to shared map
-			func() {
-				mu := &sync.Mutex{}
-				mu.Lock()
-				defer mu.Unlock()
-				qoveryConfigs[appName] = qoveryConfig
-			}()
 
 			dockerfile, _, err := generateDockerfile(app.App(), bedrockClient)
 			if err != nil {
@@ -119,7 +112,11 @@ func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, qov
 					AppName:           appName,
 					DockerfileContent: dockerfile,
 				},
-				index: index,
+				qoveryConfig: map[string]interface{}{
+					appName: qoveryConfig,
+				},
+				appName: appName,
+				index:   index,
 			}
 
 			progress := 0.3 + (float64(index+1) / float64(totalApps) * 0.4)
@@ -138,11 +135,19 @@ func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, qov
 
 	// Collect results maintaining original order
 	dockerfiles := make([]Dockerfile, totalApps)
+	qoveryConfigs := make(map[string]interface{})
+
+	// Collect results and build maps after all goroutines complete
 	for result := range resultChan {
 		if result.err != nil {
 			return nil, result.err
 		}
 		dockerfiles[result.index] = result.dockerfile
+		if result.qoveryConfig != nil {
+			for k, v := range result.qoveryConfig {
+				qoveryConfigs[k] = v
+			}
+		}
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
