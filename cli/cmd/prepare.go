@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/bedrock"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/migration"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
@@ -73,6 +74,13 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		fmt.Println("Warning: AWS_REGION not set, defaulting to us-east-1")
 	}
 
+	// Check for Bedrock Model ARN
+	bedrockModelARN := os.Getenv("AWS_BEDROCK_MODEL_ARN")
+	if bedrockModelARN == "" {
+		fmt.Println("Error: AWS_BEDROCK_MODEL_ARN must be set in the environment")
+		os.Exit(1)
+	}
+
 	qoveryAPIKey := os.Getenv("QOVERY_API_KEY")
 	if qoveryAPIKey == "" {
 		fmt.Println("Error: QOVERY_API_KEY must be set in the environment")
@@ -105,6 +113,10 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		}
 	}()
 
+	bedrockClientConfig := bedrock.DefaultConfig()
+	bedrockClientConfig.AWSRegion = awsRegion
+	bedrockClientConfig.InferenceProfileARN = bedrockModelARN
+
 	var assets *migration.Assets
 	var err error
 
@@ -113,10 +125,10 @@ func runPrepare(cmd *cobra.Command, args []string) {
 			herokuAPIKey,
 			awsAccessKey,
 			awsSecretKey,
-			awsRegion,
 			qoveryAPIKey,
 			githubToken,
 			destination,
+			bedrockClientConfig,
 			progressChan,
 		)
 	}
@@ -126,10 +138,10 @@ func runPrepare(cmd *cobra.Command, args []string) {
 			clevercloudAuthToken,
 			awsAccessKey,
 			awsSecretKey,
-			awsRegion,
 			qoveryAPIKey,
 			githubToken,
 			destination,
+			bedrockClientConfig,
 			progressChan,
 		)
 	}

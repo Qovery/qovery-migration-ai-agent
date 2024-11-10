@@ -102,11 +102,12 @@ func DefaultConfig() ClientConfig {
 
 // BedrockRequest represents the request structure for Bedrock API
 type BedrockRequest struct {
-	Messages    []Message `json:"messages"`
-	MaxTokens   int       `json:"max_tokens"`
-	Temperature float64   `json:"temperature"`
-	TopP        float64   `json:"top_p"`
-	TopK        int       `json:"top_k"`
+	AnthropicVersion string    `json:"anthropic_version"`
+	Messages         []Message `json:"messages"`
+	MaxTokens        int       `json:"max_tokens"`
+	Temperature      float64   `json:"temperature"`
+	TopP             float64   `json:"top_p"`
+	TopK             int       `json:"top_k"`
 }
 
 // Message represents a single message in the conversation
@@ -155,6 +156,7 @@ func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) (
 // Messages sends a chat request to Claude AI via AWS Bedrock and returns the response
 func (c *BedrockClient) Messages(prompt string) (string, error) {
 	request := BedrockRequest{
+		AnthropicVersion: "bedrock-2023-05-31",
 		Messages: []Message{
 			{
 				Role:    "user",
