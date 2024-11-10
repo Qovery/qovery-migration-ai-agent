@@ -3,7 +3,7 @@ module backend
 go 1.22.5
 
 require (
-	github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110123723-4860d0bd0d3f
+	github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110132334-296bd08ff37b
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0

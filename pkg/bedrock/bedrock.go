@@ -76,6 +76,7 @@ type BedrockClient struct {
 	bedrockClient *bedrockruntime.Client
 	rateLimiter   *RateLimiter
 	config        ClientConfig
+	semaphore     chan struct{} // Added for parallel request limiting
 }
 
 // ClientConfig holds configuration options for the Bedrock client
@@ -85,7 +86,8 @@ type ClientConfig struct {
 	InitialRetryDelay    time.Duration
 	MaxRetryDelay        time.Duration
 	AWSRegion            string
-	InferenceProfileARN  string // New field for inference profile
+	InferenceProfileARN  string
+	MaxParallelRequests  int
 }
 
 // DefaultConfig returns the default client configuration
@@ -97,6 +99,7 @@ func DefaultConfig() ClientConfig {
 		MaxRetryDelay:        3 * time.Minute, // Maximum delay between retries
 		AWSRegion:            "us-east-1",     // Default AWS region
 		InferenceProfileARN:  "",              // Must be set by user
+		MaxParallelRequests:  5,               // Default to 5 parallel requests
 	}
 }
 
@@ -134,6 +137,10 @@ func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) (
 		return nil, fmt.Errorf("InferenceProfileARN is required")
 	}
 
+	if cfg.MaxParallelRequests < 1 {
+		return nil, fmt.Errorf("MaxParallelRequests must be at least 1")
+	}
+
 	// Load AWS configuration with credentials
 	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
 		awsconfig.WithRegion(cfg.AWSRegion),
@@ -150,11 +157,18 @@ func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) (
 		bedrockClient: client,
 		rateLimiter:   newRateLimiter(cfg.MaxRequestsPerMinute, time.Minute),
 		config:        cfg,
+		semaphore:     make(chan struct{}, cfg.MaxParallelRequests),
 	}, nil
 }
 
 // Messages sends a chat request to Claude AI via AWS Bedrock and returns the response
 func (c *BedrockClient) Messages(prompt string) (string, error) {
+	// Acquire semaphore slot
+	c.semaphore <- struct{}{}
+	defer func() {
+		<-c.semaphore // Release semaphore slot
+	}()
+
 	request := BedrockRequest{
 		AnthropicVersion: "bedrock-2023-05-31",
 		Messages: []Message{

@@ -20,6 +20,8 @@ github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110111922-65a5a85c6a6f h
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110111922-65a5a85c6a6f/go.mod h1:UjD7K2MbbhMiE0ryoBSA5ehWaDTA66+kCZD+ar4Xs94=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110123723-4860d0bd0d3f h1:Vj17qWVhicyGBBOTDN3SM4MbEWyQZn7HwcAAGujKFmI=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110123723-4860d0bd0d3f/go.mod h1:MJJ6ssOmjGFbkg1Q6pydEdJvqQb5DACmCGqjSBwVZo4=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110132334-296bd08ff37b h1:ZvwjnVPLFCyBe2DqPy8Rikq+P+WebOu3moMZ3snVmzo=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241110132334-296bd08ff37b/go.mod h1:MJJ6ssOmjGFbkg1Q6pydEdJvqQb5DACmCGqjSBwVZo4=
 github.com/aws/aws-sdk-go v1.55.5 h1:KKUZBfBoyqy5d3swXyiC7Q76ic40rYcbqH7qjh59kzU=
 github.com/aws/aws-sdk-go v1.55.5/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
 github.com/aws/aws-sdk-go-v2 v1.32.4 h1:S13INUiTxgrPueTmrm5DZ+MiAo99zYzHEFh1UNkOxNE=
