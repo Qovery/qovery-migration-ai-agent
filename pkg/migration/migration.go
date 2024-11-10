@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Qovery/qovery-migration-ai-agent/pkg/bedrock"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/sources"
 	"io/ioutil"
 	"os"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	_ "embed"
-	"github.com/Qovery/qovery-migration-ai-agent/pkg/claude"
 	"github.com/Qovery/qovery-migration-ai-agent/pkg/qovery"
 	"github.com/google/go-github/v39/github"
 	"golang.org/x/oauth2"
@@ -43,7 +43,7 @@ type ProgressUpdate struct {
 	Progress float64
 }
 
-func GenerateHerokuMigrationAssets(herokuAPIKey, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateHerokuMigrationAssets(herokuAPIKey, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
 
 	herokuProvider := sources.NewHerokuProvider(herokuAPIKey)
@@ -52,10 +52,10 @@ func GenerateHerokuMigrationAssets(herokuAPIKey, claudeAPIKey, qoveryAPIKey, git
 		return nil, fmt.Errorf("error fetching Heroku configs: %w", err)
 	}
 
-	return GenerateMigrationAssets(configs, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+	return GenerateMigrationAssets(configs, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination, progressChan)
 }
 
-func GenerateCleverCloudMigrationAssets(authToken, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateCleverCloudMigrationAssets(authToken, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
 
 	clevercloudProvider := sources.NewCleverCloudProvider(authToken)
@@ -64,12 +64,20 @@ func GenerateCleverCloudMigrationAssets(authToken, claudeAPIKey, qoveryAPIKey, g
 		return nil, fmt.Errorf("error fetching Clever Cloud configs: %w", err)
 	}
 
-	return GenerateMigrationAssets(configs, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+	return GenerateMigrationAssets(configs, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination, progressChan)
 }
 
 // GenerateMigrationAssets generates all necessary assets for migration and reports progress
-func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
-	claudeClient := claude.NewClaudeClient(claudeAPIKey)
+func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+	// Initialize Bedrock client with AWS credentials
+	bedrockClient := bedrock.NewBedrockClient(awsKey, awsSecret, bedrock.ClientConfig{
+		MaxRequestsPerMinute: 50,
+		MaxRetries:           20,
+		InitialRetryDelay:    1 * time.Second,
+		MaxRetryDelay:        3 * time.Minute,
+		AWSRegion:            awsRegion,
+	})
+
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
 
 	var err error
@@ -88,7 +96,7 @@ func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAP
 		qoveryConfigs[appName] = qoveryConfig
 		currentCost += app.Cost()
 
-		dockerfile, _, err := generateDockerfile(app.App(), claudeClient)
+		dockerfile, _, err := generateDockerfile(app.App(), bedrockClient)
 
 		if err != nil {
 			return nil, fmt.Errorf("error generating Dockerfile for %s: %w", appName, err)
@@ -106,7 +114,7 @@ func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAP
 	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
 
 	// TODO export loadQoveryTerraformDocMarkdown as a parameter
-	generatedTerraformFiles, err := generateTerraformFiles(qoveryConfigs, destination, claudeClient, githubToken, false)
+	generatedTerraformFiles, err := generateTerraformFiles(qoveryConfigs, destination, bedrockClient, githubToken, false)
 	// check there is no error in the generation of Terraform files
 	for _, generatedTerraformFile := range generatedTerraformFiles {
 		if generatedTerraformFile.MainTf == "" {
@@ -137,7 +145,7 @@ func GenerateMigrationAssets(configs []sources.AppConfig, claudeAPIKey, qoveryAP
 }
 
 // generateDockerfile generates a Dockerfile for a given app configuration
-func generateDockerfile(appConfig map[string]interface{}, claudeClient *claude.ClaudeClient) (string, string, error) {
+func generateDockerfile(appConfig map[string]interface{}, bedrockClient *bedrock.BedrockClient) (string, string, error) {
 	configJSON, err := json.Marshal(appConfig)
 	if err != nil {
 		return "", "", fmt.Errorf("error marshaling app config: %w", err)
@@ -150,7 +158,7 @@ INSTRUCTIONS THAT MUST BE FOLLOWED:
 - Generate just the Dockerfile content and nothing else.
 `, string(configJSON))
 
-	result, err := claudeClient.Messages(prompt)
+	result, err := bedrockClient.Messages(prompt)
 	return result, prompt, err
 }
 
@@ -168,7 +176,7 @@ func (g GeneratedTerraform) SanitizeAppName() string {
 }
 
 // generateTerraformFiles generates Terraform configurations for Qovery in parallel
-func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient,
+func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination string, bedrockClient *bedrock.BedrockClient,
 	githubToken string, loadQoveryTerraformDocMarkdown bool) ([]GeneratedTerraform, error) {
 
 	officialExamples, err := loadTerraformExamples("Qovery", "terraform-examples", "examples", githubToken)
@@ -283,7 +291,7 @@ TERRAFORM GENERATION INSTRUCTIONS:
 USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 %s`, string(qoveryConfigValueJSON), string(qoveryTerraformDocMarkdownJSON), string(examplesJSON))
 
-			response, err := claudeClient.Messages(prompt)
+			response, err := bedrockClient.Messages(prompt)
 			if err != nil {
 				resultChan <- result{
 					terraform: GeneratedTerraform{
@@ -308,7 +316,7 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 			}
 
 			// Validate the Terraform configuration
-			finalMainTf, err := validateTerraform(mainTf, variablesTf, claudeClient)
+			finalMainTf, err := validateTerraform(mainTf, variablesTf, bedrockClient)
 			if err != nil {
 				resultChan <- result{
 					terraform: GeneratedTerraform{
@@ -358,7 +366,7 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 }
 
 // EstimateWorkloadCosts estimates the costs of running the workload and provides a comparison report
-func EstimateWorkloadCosts(mainTfContent string, currentCosts float64, claudeClient *claude.ClaudeClient) (string, string, error) {
+func EstimateWorkloadCosts(mainTfContent string, currentCosts float64, bedrockClient *bedrock.BedrockClient) (string, string, error) {
 	// Prepare the prompt for Claude
 	prompt := fmt.Sprintf(`Given the following Terraform configuration for Qovery:
 
@@ -405,7 +413,7 @@ Important for the report: use as much as possible tables for the comparison and 
 `, mainTfContent, currentCosts)
 
 	// Get Claude's response
-	response, err := claudeClient.Messages(prompt)
+	response, err := bedrockClient.Messages(prompt)
 	if err != nil {
 		return "", prompt, fmt.Errorf("error getting response from Claude: %w", err)
 	}
@@ -534,7 +542,7 @@ func parseTerraformResponse(response string) (string, string, error) {
 }
 
 // ValidateTerraform takes an original Terraform manifest, validates it, and returns the final valid manifest or an error
-func validateTerraform(originalMainManifest string, originalVariablesManifest string, claudeClient *claude.ClaudeClient) (string, error) {
+func validateTerraform(originalMainManifest string, originalVariablesManifest string, bedrockClient *bedrock.BedrockClient) (string, error) {
 	// Create a temporary directory for Terraform files
 	tempDir, err := ioutil.TempDir("", "terraform-validate")
 	if err != nil {
@@ -599,7 +607,7 @@ Provide only the corrected Terraform code for both files without any explanation
 			time.Sleep(3 * time.Second)
 
 			// Get Claude's response
-			correctedConfig, err := claudeClient.Messages(prompt)
+			correctedConfig, err := bedrockClient.Messages(prompt)
 			if err != nil {
 				return "", fmt.Errorf("error getting response from Claude: %w", err)
 			}
@@ -654,7 +662,7 @@ Please fix the Terraform configuration to resolve these errors. Provide only the
 			time.Sleep(3 * time.Second)
 
 			// Get Claude's response
-			correctedTF, err := claudeClient.Messages(prompt)
+			correctedTF, err := bedrockClient.Messages(prompt)
 			if err != nil {
 				return "", fmt.Errorf("error getting response from Claude: %w", err)
 			}

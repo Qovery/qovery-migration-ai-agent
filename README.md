@@ -27,24 +27,28 @@ The project is structured as follows:
 
 The following environment variables are required to run the application:
 
-| Environment Variable | Description                              | Required           |
-|----------------------|------------------------------------------|--------------------|
-| `CLAUDE_API_KEY`     | Claude AI API key                        | Yes                |
-| `HEROKU_API_KEY`     | Heroku API key                           | Yes if you used it |
-| `GITHUB_TOKEN`       | GitHub token to avoid being rate limited | No                 |
+| Environment Variable    | Description                                                                | Required           |
+|-------------------------|----------------------------------------------------------------------------|--------------------|
+| `AWS_ACCESS_KEY_ID`     | AWS access key ID for Bedrock service                                      | Yes                |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret access key for Bedrock service                                  | Yes                |
+| `AWS_REGION`            | AWS region where Bedrock service is available (e.g., us-east-1, us-west-2) | Yes                |
+| `HEROKU_API_KEY`        | Heroku API key                                                             | Yes if you used it |
+| `GITHUB_TOKEN`          | GitHub token to avoid being rate limited                                   | No                 |
+
+> Note: Make sure your AWS credentials have the necessary permissions to access the Bedrock service and the Claude model.
 
 ## How it works
 
-The migration agent uses the Heroku (or other provider) API to fetch information about the application to be migrated. It then generates Terraform configurations for deploying the application on Qovery. The generated Terraform configurations include the necessary resources such as the application, environment, database, and other services.
+The migration agent uses the Heroku (or other provider) API to fetch information about the application to be migrated. It then uses Claude AI via AWS Bedrock to generate Terraform configurations for deploying the application on Qovery. The generated Terraform configurations include the necessary resources such as the application, environment, database, and other services.
 
 ```mermaid
 graph TD
     A[Start] --> B[AI Migration Agent fetches app data from Heroku API]
     B --> C[AI Migration Agent filters out sensitive data]
-    C --> D[AI Migration Agent sends non-sensitive app data to Claude AI API]
+    C --> D[AI Migration Agent sends non-sensitive app data to Claude AI via AWS Bedrock]
     D --> E[Claude AI generates Dockerfiles]
     E --> F[AI Migration Agent receives Dockerfiles]
-    F --> G[AI Migration Agent sends non-sensitive app data to Claude AI API]
+    F --> G[AI Migration Agent sends non-sensitive app data to Claude AI via AWS Bedrock]
     G --> H[Claude AI generates Qovery Terraform files]
     H --> I[AI Migration Agent receives Terraform files]
     I --> J[AI Migration Agent reintegrates sensitive data as Terraform secrets]
@@ -77,6 +81,7 @@ graph TD
 
 - This application does not store any user credentials.
 - All code is open-source and can be audited.
+- AWS credentials are only used locally and are never transmitted to third parties.
 - For more information, see the Security page in the application.
 
 ## Contributing

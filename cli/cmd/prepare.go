@@ -58,11 +58,24 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	claudeAPIKey := os.Getenv("CLAUDE_API_KEY")
-	qoveryAPIKey := os.Getenv("QOVERY_API_KEY")
+	// Check for AWS credentials for Bedrock
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	awsRegion := os.Getenv("AWS_REGION")
 
-	if claudeAPIKey == "" || qoveryAPIKey == "" {
-		fmt.Println("Error: CLAUDE_API_KEY and QOVERY_API_KEY must be set in the .env file")
+	if awsAccessKey == "" || awsSecretKey == "" {
+		fmt.Println("Error: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set in the environment")
+		os.Exit(1)
+	}
+
+	if awsRegion == "" {
+		awsRegion = "us-east-1" // Default to us-east-1 if not specified
+		fmt.Println("Warning: AWS_REGION not set, defaulting to us-east-1")
+	}
+
+	qoveryAPIKey := os.Getenv("QOVERY_API_KEY")
+	if qoveryAPIKey == "" {
+		fmt.Println("Error: QOVERY_API_KEY must be set in the environment")
 		os.Exit(1)
 	}
 
@@ -96,11 +109,29 @@ func runPrepare(cmd *cobra.Command, args []string) {
 	var err error
 
 	if source == "heroku" {
-		assets, err = migration.GenerateHerokuMigrationAssets(herokuAPIKey, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+		assets, err = migration.GenerateHerokuMigrationAssets(
+			herokuAPIKey,
+			awsAccessKey,
+			awsSecretKey,
+			awsRegion,
+			qoveryAPIKey,
+			githubToken,
+			destination,
+			progressChan,
+		)
 	}
 
 	if source == "clevercloud" {
-		assets, err = migration.GenerateCleverCloudMigrationAssets(clevercloudAuthToken, claudeAPIKey, qoveryAPIKey, githubToken, destination, progressChan)
+		assets, err = migration.GenerateCleverCloudMigrationAssets(
+			clevercloudAuthToken,
+			awsAccessKey,
+			awsSecretKey,
+			awsRegion,
+			qoveryAPIKey,
+			githubToken,
+			destination,
+			progressChan,
+		)
 	}
 
 	// Close the progress channel
@@ -134,11 +165,12 @@ func runPrepare(cmd *cobra.Command, args []string) {
 		fmt.Println(generatedTfFile.MainTf)
 
 		fmt.Println("\nTerraform Variables:")
-		fmt.Println(generatedTfFile.AppName)
+		fmt.Println(generatedTfFile.VariablesTf)
 
 		// output Dockerfile content if it exists
 		for _, dockerfile := range assets.Dockerfiles {
 			if dockerfile.AppName == generatedTfFile.AppName {
+				fmt.Println("\nDockerfile:")
 				fmt.Println(dockerfile.DockerfileContent)
 				break
 			}
