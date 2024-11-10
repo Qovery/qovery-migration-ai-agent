@@ -16,12 +16,12 @@ func main() {
 	config := handlers.Config{
 		QoveryAPIKey:           os.Getenv("QOVERY_API_KEY"),
 		GitHubToken:            os.Getenv("GITHUB_TOKEN"),
-		S3AccessKeyId:          os.Getenv("S3_ACCESS_KEY"),
+		S3AccessKeyId:          os.Getenv("S3_ACCESS_KEY_ID"),
 		S3SecretAccessKey:      os.Getenv("S3_SECRET_ACCESS_KEY"),
 		S3Bucket:               os.Getenv("S3_BUCKET"),
 		S3Region:               os.Getenv("S3_REGION"),
-		BedrockAccessKeyId:     os.Getenv("BEDROCK_ACCESS_KEY"),
-		BedrockSecretAccessKey: os.Getenv("BEDROCK_SECRET_KEY"),
+		BedrockAccessKeyId:     os.Getenv("BEDROCK_ACCESS_KEY_ID"),
+		BedrockSecretAccessKey: os.Getenv("BEDROCK_SECRET_ACCESS_KEY"),
 		BedrockRegion:          os.Getenv("BEDROCK_REGION"),
 		BedrockModelArn:        os.Getenv("BEDROCK_MODEL_ARN"),
 	}
