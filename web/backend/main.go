@@ -14,13 +14,15 @@ import (
 
 func main() {
 	config := handlers.Config{
-		ClaudeAPIKey:      os.Getenv("CLAUDE_API_KEY"),
-		QoveryAPIKey:      os.Getenv("QOVERY_API_KEY"),
-		GitHubToken:       os.Getenv("GITHUB_TOKEN"),
-		S3Bucket:          os.Getenv("S3_BUCKET"),
-		S3Region:          os.Getenv("S3_REGION"),
-		S3AccessKey:       os.Getenv("S3_ACCESS_KEY"),
-		S3SecretAccessKey: os.Getenv("S3_SECRET_ACCESS_KEY"),
+		QoveryAPIKey:           os.Getenv("QOVERY_API_KEY"),
+		GitHubToken:            os.Getenv("GITHUB_TOKEN"),
+		S3AccessKeyId:          os.Getenv("S3_ACCESS_KEY"),
+		S3SecretAccessKey:      os.Getenv("S3_SECRET_ACCESS_KEY"),
+		S3Bucket:               os.Getenv("S3_BUCKET"),
+		S3Region:               os.Getenv("S3_REGION"),
+		BedrockAccessKeyId:     os.Getenv("BEDROCK_ACCESS_KEY"),
+		BedrockSecretAccessKey: os.Getenv("BEDROCK_SECRET_KEY"),
+		BedrockRegion:          os.Getenv("BEDROCK_REGION"),
 	}
 
 	r := gin.Default()

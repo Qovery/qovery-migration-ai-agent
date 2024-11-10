@@ -306,7 +306,7 @@ TERRAFORM GENERATION INSTRUCTIONS:
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - When setting up healthchecks for the services, make sure to use scheme "HTTP" for the healthcheck type http and "TCP" for the healthcheck type tcp. Refer to the Qovery Terraform Provider Documentation for more information.
 - Try to optimize the Terraform configuration as much as possible.
-- Don't include Qoverty Terraform resources like qovery_deployment, qovery_project, qovery_environment, and qovery_cluster in the main.tf use the variable references to them instead.
+- Don't include Qovery Terraform resources "qovery_deployment", "qovery_project", "qovery_environment", and "qovery_cluster" in the main.tf; use the variable references "var.project_id" etc.. to them instead.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
 %s
 
