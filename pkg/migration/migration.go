@@ -43,7 +43,7 @@ type ProgressUpdate struct {
 	Progress float64
 }
 
-func GenerateHerokuMigrationAssets(herokuAPIKey, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateHerokuMigrationAssets(herokuAPIKey, awsKey, awsSecret, qoveryAPIKey, githubToken, destination string, bedrockClientConfig bedrock.ClientConfig, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
 
 	herokuProvider := sources.NewHerokuProvider(herokuAPIKey)
@@ -52,10 +52,10 @@ func GenerateHerokuMigrationAssets(herokuAPIKey, awsKey, awsSecret, awsRegion, q
 		return nil, fmt.Errorf("error fetching Heroku configs: %w", err)
 	}
 
-	return GenerateMigrationAssets(configs, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination, progressChan)
+	return GenerateMigrationAssets(configs, awsKey, awsSecret, qoveryAPIKey, githubToken, destination, bedrockClientConfig, progressChan)
 }
 
-func GenerateCleverCloudMigrationAssets(authToken, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateCleverCloudMigrationAssets(authToken, awsKey, awsSecret, qoveryAPIKey, githubToken, destination string, bedrockClientConfig bedrock.ClientConfig, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	progressChan <- ProgressUpdate{Stage: "Fetching configs", Progress: 0.1}
 
 	clevercloudProvider := sources.NewCleverCloudProvider(authToken)
@@ -64,23 +64,19 @@ func GenerateCleverCloudMigrationAssets(authToken, awsKey, awsSecret, awsRegion,
 		return nil, fmt.Errorf("error fetching Clever Cloud configs: %w", err)
 	}
 
-	return GenerateMigrationAssets(configs, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination, progressChan)
+	return GenerateMigrationAssets(configs, awsKey, awsSecret, qoveryAPIKey, githubToken, destination, bedrockClientConfig, progressChan)
 }
 
 // GenerateMigrationAssets generates all necessary assets for migration and reports progress
-func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, awsRegion, qoveryAPIKey, githubToken, destination string, progressChan chan<- ProgressUpdate) (*Assets, error) {
+func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, qoveryAPIKey, githubToken, destination string, bedrockClientConfig bedrock.ClientConfig, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	// Initialize Bedrock client with AWS credentials
-	bedrockClient := bedrock.NewBedrockClient(awsKey, awsSecret, bedrock.ClientConfig{
-		MaxRequestsPerMinute: 50,
-		MaxRetries:           20,
-		InitialRetryDelay:    1 * time.Second,
-		MaxRetryDelay:        3 * time.Minute,
-		AWSRegion:            awsRegion,
-	})
+	bedrockClient, err := bedrock.NewBedrockClient(awsKey, awsSecret, bedrockClientConfig)
+
+	if err != nil {
+		return nil, fmt.Errorf("error initializing Bedrock client: %w", err)
+	}
 
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
-
-	var err error
 
 	progressChan <- ProgressUpdate{Stage: "Processing configs", Progress: 0.3}
 

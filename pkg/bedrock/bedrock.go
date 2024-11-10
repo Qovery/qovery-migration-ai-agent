@@ -85,6 +85,7 @@ type ClientConfig struct {
 	InitialRetryDelay    time.Duration
 	MaxRetryDelay        time.Duration
 	AWSRegion            string
+	InferenceProfileARN  string // New field for inference profile
 }
 
 // DefaultConfig returns the default client configuration
@@ -95,29 +96,41 @@ func DefaultConfig() ClientConfig {
 		InitialRetryDelay:    1 * time.Second, // Start with 1 second delay
 		MaxRetryDelay:        3 * time.Minute, // Maximum delay between retries
 		AWSRegion:            "us-east-1",     // Default AWS region
+		InferenceProfileARN:  "",              // Must be set by user
 	}
 }
 
 // BedrockRequest represents the request structure for Bedrock API
 type BedrockRequest struct {
-	Prompt            string   `json:"prompt"`
-	MaxTokensToSample int      `json:"max_tokens_to_sample"`
-	Temperature       float64  `json:"temperature"`
-	TopP              float64  `json:"top_p"`
-	TopK              int      `json:"top_k"`
-	StopSequences     []string `json:"stop_sequences"`
+	Messages    []Message `json:"messages"`
+	MaxTokens   int       `json:"max_tokens"`
+	Temperature float64   `json:"temperature"`
+	TopP        float64   `json:"top_p"`
+	TopK        int       `json:"top_k"`
+}
+
+// Message represents a single message in the conversation
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 // BedrockResponse represents the response structure from Bedrock API
 type BedrockResponse struct {
-	Completion string `json:"completion"`
+	Content []struct {
+		Text string `json:"text"`
+	} `json:"content"`
 }
 
 // NewBedrockClient creates a new BedrockClient with AWS credentials and optional config
-func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) *BedrockClient {
+func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) (*BedrockClient, error) {
 	cfg := DefaultConfig()
 	if len(config) > 0 {
 		cfg = config[0]
+	}
+
+	if cfg.InferenceProfileARN == "" {
+		return nil, fmt.Errorf("InferenceProfileARN is required")
 	}
 
 	// Load AWS configuration with credentials
@@ -126,7 +139,7 @@ func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) *
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(awsKey, awsSecret, "")),
 	)
 	if err != nil {
-		log.Fatalf("unable to load AWS SDK config: %v", err)
+		return nil, fmt.Errorf("unable to load AWS SDK config: %v", err)
 	}
 
 	// Create Bedrock client
@@ -136,18 +149,22 @@ func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) *
 		bedrockClient: client,
 		rateLimiter:   newRateLimiter(cfg.MaxRequestsPerMinute, time.Minute),
 		config:        cfg,
-	}
+	}, nil
 }
 
 // Messages sends a chat request to Claude AI via AWS Bedrock and returns the response
 func (c *BedrockClient) Messages(prompt string) (string, error) {
 	request := BedrockRequest{
-		Prompt:            prompt,
-		MaxTokensToSample: 8192,
-		Temperature:       0.7,
-		TopP:              1,
-		TopK:              250,
-		StopSequences:     []string{"\n\nHuman:", "\n\nAssistant:"},
+		Messages: []Message{
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
+		MaxTokens:   8192,
+		Temperature: 0.7,
+		TopP:        1,
+		TopK:        250,
 	}
 
 	jsonPayload, err := json.Marshal(request)
@@ -159,30 +176,25 @@ func (c *BedrockClient) Messages(prompt string) (string, error) {
 	retryDelay := c.config.InitialRetryDelay
 
 	for attempt := 0; attempt < c.config.MaxRetries; attempt++ {
-		// Wait for rate limit token
 		c.rateLimiter.wait()
 
-		// Create Bedrock API request
 		input := &bedrockruntime.InvokeModelInput{
-			ModelId:     aws.String("anthropic.claude-3-5-sonnet-20240620-v1:0"),
+			ModelId:     aws.String(c.config.InferenceProfileARN),
 			Accept:      aws.String("application/json"),
 			ContentType: aws.String("application/json"),
 			Body:        jsonPayload,
 		}
 
-		// Invoke the model
 		output, err := c.bedrockClient.InvokeModel(context.Background(), input)
 
 		if err != nil {
 			c.rateLimiter.release()
 
-			// Handle specific AWS errors
 			var apiErr smithy.APIError
 			if ok := errors.As(err, &apiErr); ok {
 				switch apiErr.ErrorCode() {
 				case "ThrottlingException", "ServiceUnavailable", "InternalServerError":
 					if attempt < c.config.MaxRetries-1 {
-						// Add jitter to prevent thundering herd
 						jitter := time.Duration(rand.Int63n(int64(retryDelay) / 2))
 						sleepTime := retryDelay + jitter
 
@@ -209,8 +221,13 @@ func (c *BedrockClient) Messages(prompt string) (string, error) {
 		}
 
 		c.rateLimiter.release()
-		content = response.Completion
-		return content, nil
+
+		if len(response.Content) > 0 {
+			content = response.Content[0].Text
+			return content, nil
+		}
+
+		return "", fmt.Errorf("empty response from model")
 	}
 
 	return "", fmt.Errorf("max retries reached without successful response")
