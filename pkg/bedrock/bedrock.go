@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
@@ -127,6 +129,36 @@ type BedrockResponse struct {
 	} `json:"content"`
 }
 
+func checkSystemClock() error {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://worldtimeapi.org/api/timezone/Etc/UTC")
+	if err != nil {
+		return fmt.Errorf("failed to check time: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Unixtime int64 `json:"unixtime"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode time response: %v", err)
+	}
+
+	systemTime := time.Now().Unix()
+	diff := abs(systemTime - result.Unixtime)
+	if diff > 300 { // 5 minutes
+		return fmt.Errorf("system clock is off by %d seconds", diff)
+	}
+	return nil
+}
+
+func abs(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 // NewBedrockClient creates a new BedrockClient with AWS credentials and optional config
 func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) (*BedrockClient, error) {
 	cfg := DefaultConfig()
@@ -142,10 +174,22 @@ func NewBedrockClient(awsKey string, awsSecret string, config ...ClientConfig) (
 		return nil, fmt.Errorf("MaxParallelRequests must be at least 1")
 	}
 
-	// Load AWS configuration with credentials
+	// Check system clock synchronization
+	if err := checkSystemClock(); err != nil {
+		log.Printf("Warning: %v", err)
+	}
+
+	// Load AWS configuration with credentials and clock skew manager
 	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
 		awsconfig.WithRegion(cfg.AWSRegion),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(awsKey, awsSecret, "")),
+		awsconfig.WithClientLogMode(aws.LogRetries), // Add logging for retries
+		awsconfig.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.NewStandard(),
+				time.Second*5,
+			)
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load AWS SDK config: %v", err)
@@ -207,16 +251,15 @@ func (c *BedrockClient) Messages(prompt string) (string, error) {
 		if err != nil {
 			c.rateLimiter.release()
 
-			// Handle different types of errors that should trigger retries
 			var apiErr smithy.APIError
 			if errors.As(err, &apiErr) {
 				errorCode := apiErr.ErrorCode()
 				errorMessage := apiErr.Error()
 
-				// Check for specific error conditions that warrant a retry
 				shouldRetry := errorCode == "ThrottlingException" ||
 					errorCode == "ServiceUnavailable" ||
 					errorCode == "InternalServerError" ||
+					errorCode == "InvalidSignatureException" ||
 					strings.Contains(errorMessage, "503") ||
 					strings.Contains(errorMessage, "ServiceUnavailableException") ||
 					strings.Contains(errorMessage, "Model is getting throttled")
