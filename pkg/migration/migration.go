@@ -310,7 +310,7 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 			}
 
 			// Validate the Terraform configuration
-			finalMainTf, err := validateTerraform(mainTf, variablesTf, bedrockClient)
+			finalMainTf, finalVariablesTf, err := validateTerraform(mainTf, variablesTf, bedrockClient)
 			if err != nil {
 				resultChan <- result{
 					terraform: GeneratedTerraform{
@@ -326,7 +326,7 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 				terraform: GeneratedTerraform{
 					AppName:     appName,
 					MainTf:      finalMainTf,
-					VariablesTf: variablesTf,
+					VariablesTf: finalVariablesTf,
 					Prompt:      prompt,
 				},
 				err: nil,
