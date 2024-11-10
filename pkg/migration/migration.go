@@ -278,7 +278,7 @@ TERRAFORM GENERATION INSTRUCTIONS:
 - The cluster and environment resources are not required in the configuration. Export the cluster and environment ids as variables.
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - Try to optimize the Terraform configuration as much as possible.
-- Don't include Terraform resources like qovery_deployment, qovery_project, qovery_environment, and qovery_cluster - use the variable references to them instead.
+- Don't include Qoverty Terraform resources like qovery_deployment, qovery_project, qovery_environment, and qovery_cluster in the main.tf use the variable references to them instead.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
 %s
 
@@ -592,7 +592,18 @@ Please fix the main.tf configuration to resolve these initialization errors. Foc
 - Module source problems
 - Version constraints
 
-Provide only the corrected main.tf code without any explanations.`, mainContent, initOutput)
+Provide only the corrected main.tf code without any explanations and no formating. Output must look like this:
+terraform {
+  required_providers {
+    qovery = {
+      source = "qovery/qovery"
+    }
+  }
+}
+
+provider "qovery" {
+  token = var.qovery_access_token
+}`, mainContent, initOutput)
 
 			// Get Bedrock's response for main.tf
 			correctedMain, err := bedrockClient.Messages(mainPrompt)
@@ -615,7 +626,21 @@ Please fix the variables.tf configuration to resolve these initialization errors
 - Default values
 - Variable validation rules
 
-Provide only the corrected variables.tf code without any explanations.`, varsContent, initOutput)
+Provide only the corrected variables.tf code without any explanations and no formating. Output must look like this:
+variable "project_id" {
+  type        = string
+  description = "The ID of the Qovery project"
+}
+
+variable "environment_id" {
+  type        = string
+  description = "The ID of the Qovery environment"
+}
+
+variable "application_name" {
+  type        = string
+  description = "The name of the application"
+}`, varsContent, initOutput)
 
 			// Get Bedrock's response for variables.tf
 			correctedVars, err := bedrockClient.Messages(varsPrompt)
