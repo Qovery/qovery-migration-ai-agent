@@ -277,6 +277,7 @@ TERRAFORM GENERATION INSTRUCTIONS:
 - If some services use the "review app" then turn on the preview environment for them with Qoverys's Terraform Provider.
 - The cluster and environment resources are not required in the configuration. Export the cluster and environment ids as variables.
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
+- When setting up healthchecks for the services, make sure to use scheme "HTTP" for the healthcheck type http and "TCP" for the healthcheck type tcp. Refer to the Qovery Terraform Provider Documentation for more information.
 - Try to optimize the Terraform configuration as much as possible.
 - Don't include Qoverty Terraform resources like qovery_deployment, qovery_project, qovery_environment, and qovery_cluster in the main.tf use the variable references to them instead.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
