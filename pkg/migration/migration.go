@@ -69,62 +69,97 @@ func GenerateCleverCloudMigrationAssets(authToken, awsKey, awsSecret, qoveryAPIK
 func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, qoveryAPIKey, githubToken, destination string, bedrockClientConfig bedrock.ClientConfig, progressChan chan<- ProgressUpdate) (*Assets, error) {
 	// Initialize Bedrock client with AWS credentials
 	bedrockClient, err := bedrock.NewBedrockClient(awsKey, awsSecret, bedrockClientConfig)
-
 	if err != nil {
 		return nil, fmt.Errorf("error initializing Bedrock client: %w", err)
 	}
 
 	qoveryProvider := qovery.NewQoveryProvider(qoveryAPIKey)
-
 	progressChan <- ProgressUpdate{Stage: "Processing configs", Progress: 0.3}
 
 	var qoveryConfigs = make(map[string]interface{})
-	var dockerfiles []Dockerfile
-
-	var currentCost = 0.0
-
 	totalApps := len(configs)
+
+	// Create channels for collecting results and errors
+	type dockerfileResult struct {
+		dockerfile Dockerfile
+		err        error
+		index      int
+	}
+	resultChan := make(chan dockerfileResult, totalApps)
+
+	// Launch goroutines for parallel Dockerfile generation
+	var wg sync.WaitGroup
 	for i, app := range configs {
-		appName := app.Name()
-		qoveryConfig := qoveryProvider.TranslateConfig(appName, app.Map(), destination)
-		qoveryConfigs[appName] = qoveryConfig
-		currentCost += app.Cost()
+		wg.Add(1)
+		go func(app sources.AppConfig, index int) {
+			defer wg.Done()
 
-		dockerfile, _, err := generateDockerfile(app.App(), bedrockClient)
+			appName := app.Name()
+			qoveryConfig := qoveryProvider.TranslateConfig(appName, app.Map(), destination)
 
-		if err != nil {
-			return nil, fmt.Errorf("error generating Dockerfile for %s: %w", appName, err)
+			// Use mutex to safely write to shared map
+			func() {
+				mu := &sync.Mutex{}
+				mu.Lock()
+				defer mu.Unlock()
+				qoveryConfigs[appName] = qoveryConfig
+			}()
+
+			dockerfile, _, err := generateDockerfile(app.App(), bedrockClient)
+			if err != nil {
+				resultChan <- dockerfileResult{
+					err:   fmt.Errorf("error generating Dockerfile for %s: %w", appName, err),
+					index: index,
+				}
+				return
+			}
+
+			resultChan <- dockerfileResult{
+				dockerfile: Dockerfile{
+					AppName:           appName,
+					DockerfileContent: dockerfile,
+				},
+				index: index,
+			}
+
+			progress := 0.3 + (float64(index+1) / float64(totalApps) * 0.4)
+			progressChan <- ProgressUpdate{
+				Stage:    fmt.Sprintf("Processing app %d/%d", index+1, totalApps),
+				Progress: progress,
+			}
+		}(app, i)
+	}
+
+	// Close result channel once all goroutines complete
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results maintaining original order
+	dockerfiles := make([]Dockerfile, totalApps)
+	for result := range resultChan {
+		if result.err != nil {
+			return nil, result.err
 		}
-
-		dockerfiles = append(dockerfiles, Dockerfile{
-			AppName:           appName,
-			DockerfileContent: dockerfile,
-		})
-
-		progress := 0.3 + (float64(i+1) / float64(totalApps) * 0.4)
-		progressChan <- ProgressUpdate{Stage: fmt.Sprintf("Processing app %d/%d", i+1, totalApps), Progress: progress}
+		dockerfiles[result.index] = result.dockerfile
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Generating Terraform configs", Progress: 0.7}
 
-	// TODO export loadQoveryTerraformDocMarkdown as a parameter
 	generatedTerraformFiles, err := generateTerraformFiles(qoveryConfigs, destination, bedrockClient, githubToken, false)
-	// check there is no error in the generation of Terraform files
+	if err != nil {
+		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
+	}
+
+	// Check Terraform files
 	for _, generatedTerraformFile := range generatedTerraformFiles {
 		if generatedTerraformFile.MainTf == "" {
-			return nil, fmt.Errorf("error generating Terraform configs for %s: %w", generatedTerraformFile.AppName, err)
+			return nil, fmt.Errorf("error generating Terraform configs for %s: empty main.tf", generatedTerraformFile.AppName)
 		}
 	}
 
 	progressChan <- ProgressUpdate{Stage: "Estimating costs", Progress: 0.9}
-
-	// TODO fix the cost estimation
-	// costEstimation, costEstimationPrompt, err := EstimateWorkloadCosts(terraformMain, currentCost, claudeClient)
-	// prompts = append(prompts, AssetsPrompt{Type: "CostEstimation", Name: "cost_estimation_report.md", Prompt: costEstimationPrompt, Result: costEstimation})
-
-	if err != nil {
-		return nil, fmt.Errorf("error estimating workload costs: %w", err)
-	}
 
 	assets := &Assets{
 		ReadmeMarkdown:               readmeContent,
@@ -232,17 +267,14 @@ func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination st
 				return
 			}
 
-			prompt := fmt.Sprintf(`CONTEXT:
-This function must return the Terraform configuration main.tf and variables.tf that will be used to deploy the application with Qovery.
+			// First request: Generate main.tf
+			mainTfPrompt := fmt.Sprintf(`CONTEXT:
+This function must return the main.tf Terraform configuration that will be used to deploy the application with Qovery.
 
 OUTPUT FORMAT REQUIREMENTS:
-Provide two separate configurations
-1. A main.tf file containing the Terraform configuration for the app.
-2. A variables.tf file containing the variables for the main.tf file.
-Format the response as a tuple of two strings with a "|||" separator: (main_tf_content|||variables_tf_content) without anything else. No introduction our final sentences because I will parse the output.
-
-Example of the output:
-(terraform {
+Provide only the main.tf configuration without any variables declarations.
+Format the response as a single string containing only the main.tf content, without any separators or additional text. The response must look like this:
+terraform {
   required_providers {
     qovery = {
       source = "qovery/qovery"
@@ -252,24 +284,14 @@ Example of the output:
 
 provider "qovery" {
   token = var.qovery_access_token
-}|||variable "qovery_access_token" {
-  type        = string
-  description = "Qovery API access token"
 }
-
-variable "environment_id" {
-  type        = string
-  description = "Qovery environment ID"
-})
-
-So my parser function in Golang can parse the output and extract the two strings.
 
 GENERATE A CONSOLIDATED TERRAFORM CONFIGURATION FOR QOVERY THAT INCLUDE THE FOLLOWING APP AND THE DEPENDENCIES (DATABASES, SERVICES, ETC):
 %s
 
 TERRAFORM GENERATION INSTRUCTIONS:
 - Don't use Buildpacks, only use Dockerfiles for build_mode.
-- Export secrets or sensitive information (E.g environment variable key with name containaing SECRET, KEY, URI, TOKEN, and every value that looks like a secret) from the main.tf file into the variables.tf with no default value.
+- Export secrets or sensitive information (E.g environment variable key with name containaing SECRET, KEY, URI, TOKEN, and every value that looks like a secret) from the main.tf file into variables.
 - If an application refer to a database that is created by another application, make sure to use the same existing database in the Terraform configuration.
 - If an application to another application via the environment variables, make sure to use the "environment_variable_aliases" from the Qovery Terraform Provider resource (if available. cf doc).
 - If in the service you see an application that can be provided by a container image from the DockerHub, use the "container_image" from the Qovery Terraform Provider resource (if available. cf doc).
@@ -286,37 +308,97 @@ TERRAFORM GENERATION INSTRUCTIONS:
 USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 %s`, string(qoveryConfigValueJSON), string(qoveryTerraformDocMarkdownJSON), string(examplesJSON))
 
-			response, err := bedrockClient.Messages(prompt)
+			mainTfResponse, err := bedrockClient.Messages(mainTfPrompt)
 			if err != nil {
 				resultChan <- result{
 					terraform: GeneratedTerraform{
 						AppName: appName,
-						Prompt:  prompt,
+						Prompt:  mainTfPrompt,
 					},
-					err: fmt.Errorf("error generating Terraform configs for %s: %w", appName, err),
+					err: fmt.Errorf("error generating main.tf for %s: %w", appName, err),
 				}
 				return
 			}
 
-			mainTf, variablesTf, err := parseTerraformResponse(response)
+			// Parse and validate main.tf
+			mainTf, err := parseMainTfResponse(mainTfResponse)
 			if err != nil {
 				resultChan <- result{
 					terraform: GeneratedTerraform{
 						AppName: appName,
-						Prompt:  prompt,
+						Prompt:  mainTfPrompt,
 					},
-					err: fmt.Errorf("error parsing Terraform response for %s: %w", appName, err),
+					err: fmt.Errorf("error parsing main.tf response for %s: %w", appName, err),
 				}
 				return
 			}
 
-			// Validate the Terraform configuration
+			// Second request: Generate variables.tf based on main.tf
+			variablesTfPrompt := fmt.Sprintf(`CONTEXT:
+Generate the variables.tf file for the following main.tf Terraform configuration:
+
+%s
+
+VARIABLE GENERATION INSTRUCTIONS:
+- Include all necessary variables referenced in the main.tf file
+- Don't provide default values for sensitive information (secrets, tokens, keys, URIs)
+- Include appropriate descriptions for all variables
+- Group related variables together with comments
+- Include type constraints for all variables
+- Make sure to include all environment IDs, cluster IDs, and other referenced variables from main.tf
+
+OUTPUT FORMAT REQUIREMENTS:
+Provide only the variables.tf configuration.
+Format the response as a single string containing only the variables.tf content, without any separators or additional text. The response must look like this:
+variable "project_id" {
+  type        = string
+  description = "The ID of the Qovery project"
+}
+
+variable "environment_id" {
+  type        = string
+  description = "The ID of the Qovery environment"
+}
+
+variable "application_name" {
+  type        = string
+  description = "The name of the application"
+}`, mainTf)
+
+			variablesTfResponse, err := bedrockClient.Messages(variablesTfPrompt)
+			if err != nil {
+				resultChan <- result{
+					terraform: GeneratedTerraform{
+						AppName: appName,
+						MainTf:  mainTf,
+						Prompt:  variablesTfPrompt,
+					},
+					err: fmt.Errorf("error generating variables.tf for %s: %w", appName, err),
+				}
+				return
+			}
+
+			// Parse variables.tf
+			variablesTf, err := parseVariablesTfResponse(variablesTfResponse)
+			if err != nil {
+				resultChan <- result{
+					terraform: GeneratedTerraform{
+						AppName: appName,
+						MainTf:  mainTf,
+						Prompt:  variablesTfPrompt,
+					},
+					err: fmt.Errorf("error parsing variables.tf response for %s: %w", appName, err),
+				}
+				return
+			}
+
+			// Validate the complete Terraform configuration
 			finalMainTf, finalVariablesTf, err := validateTerraform(mainTf, variablesTf, bedrockClient)
 			if err != nil {
 				resultChan <- result{
 					terraform: GeneratedTerraform{
 						AppName: appName,
-						Prompt:  prompt,
+						Prompt:  mainTfPrompt + "\n\n" + variablesTfPrompt,
 					},
 					err: fmt.Errorf("error validating Terraform configuration for %s: %w", appName, err),
 				}
@@ -328,7 +410,7 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 					AppName:     appName,
 					MainTf:      finalMainTf,
 					VariablesTf: finalVariablesTf,
-					Prompt:      prompt,
+					Prompt:      mainTfPrompt + "\n\n" + variablesTfPrompt,
 				},
 				err: nil,
 			}
@@ -354,10 +436,32 @@ USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 
 	// If there were any errors, return the first one
 	if len(errors) > 0 {
-		return generatedTerraformFiles, fmt.Errorf("errors occurred during parallel processing: %v", errors[0])
+		errorsStr := make([]string, len(errors))
+		for i, err := range errors {
+			errorsStr[i] = err.Error()
+		}
+
+		return generatedTerraformFiles, fmt.Errorf("%d errors occurred during parallel processing: %v", len(errors), strings.Join(errorsStr, ", "))
 	}
 
 	return generatedTerraformFiles, nil
+}
+
+// Helper functions to parse individual responses
+func parseMainTfResponse(response string) (string, error) {
+	mainTf := strings.TrimSpace(response)
+	if mainTf == "" {
+		return "", fmt.Errorf("empty main.tf response")
+	}
+	return mainTf, nil
+}
+
+func parseVariablesTfResponse(response string) (string, error) {
+	variablesTf := strings.TrimSpace(response)
+	if variablesTf == "" {
+		return "", fmt.Errorf("empty variables.tf response")
+	}
+	return variablesTf, nil
 }
 
 // EstimateWorkloadCosts estimates the costs of running the workload and provides a comparison report
