@@ -12,6 +12,8 @@ github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241108134919-ff89c035bf29 h
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241108134919-ff89c035bf29/go.mod h1:UjD7K2MbbhMiE0ryoBSA5ehWaDTA66+kCZD+ar4Xs94=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241109204024-bb56cb8937de h1:pK9wMnJlkfEWQ8FCrmDxBzbk54+9Ssxf/tvFGNRPOVs=
 github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241109204024-bb56cb8937de/go.mod h1:UjD7K2MbbhMiE0ryoBSA5ehWaDTA66+kCZD+ar4Xs94=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241109210139-1b2a89c0e685 h1:m/RK2DUWYEnsQlXf7+LdW8EcUneV7rU7t00ZVe58iHw=
+github.com/Qovery/qovery-migration-ai-agent v0.0.0-20241109210139-1b2a89c0e685/go.mod h1:UjD7K2MbbhMiE0ryoBSA5ehWaDTA66+kCZD+ar4Xs94=
 github.com/aws/aws-sdk-go v1.55.5 h1:KKUZBfBoyqy5d3swXyiC7Q76ic40rYcbqH7qjh59kzU=
 github.com/aws/aws-sdk-go v1.55.5/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
 github.com/bytedance/sonic v1.11.6 h1:oUp34TzMlL+OY1OUWxHqsdkgC/Zfc85zGqw9siXjrc0=

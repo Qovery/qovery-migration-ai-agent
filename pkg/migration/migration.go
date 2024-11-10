@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	_ "embed"
@@ -166,7 +167,7 @@ func (g GeneratedTerraform) SanitizeAppName() string {
 	return strings.ToLower(s)
 }
 
-// generateTerraformFiles generates Terraform configurations for Qovery
+// generateTerraformFiles generates Terraform configurations for Qovery in parallel
 func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination string, claudeClient *claude.ClaudeClient,
 	githubToken string, loadQoveryTerraformDocMarkdown bool) ([]GeneratedTerraform, error) {
 
@@ -197,24 +198,39 @@ func generateTerraformFiles(qoveryConfigs map[string]interface{}, destination st
 		qoveryTerraformDocMarkdownJSON = []byte("")
 	} else {
 		qoveryTerraformDocMarkdownJSON, err = json.Marshal(qoveryTerraformDocMarkdown)
-
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling Qovery Terraform Provider markdown documentation: %w", err)
 		}
 	}
 
-	var generatedTerraformFiles []GeneratedTerraform
-	for appName, qoveryConfigValue := range qoveryConfigs {
-		// the idea here is to generate the Terraform configuration for each app in the Qovery configuration
-		// to avoid having a prompt exceeding the model input token size.
-		// This way we can generate the Terraform configuration for each app separately and then merge them into a single file.
-		// and then merge them into a single file.
-		qoveryConfigValueJSON, err := json.Marshal(qoveryConfigValue)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling Qovery config: %w", err)
-		}
+	// Create channels for results and errors
+	type result struct {
+		terraform GeneratedTerraform
+		err       error
+	}
+	resultChan := make(chan result, len(qoveryConfigs))
 
-		prompt := fmt.Sprintf(`CONTEXT:
+	// Create a wait group to wait for all goroutines to complete
+	var wg sync.WaitGroup
+
+	// Process each app configuration in parallel
+	for appName, qoveryConfigValue := range qoveryConfigs {
+		wg.Add(1)
+		go func(appName string, qoveryConfigValue interface{}) {
+			defer wg.Done()
+
+			qoveryConfigValueJSON, err := json.Marshal(qoveryConfigValue)
+			if err != nil {
+				resultChan <- result{
+					terraform: GeneratedTerraform{
+						AppName: appName,
+					},
+					err: fmt.Errorf("error marshaling Qovery config for %s: %w", appName, err),
+				}
+				return
+			}
+
+			prompt := fmt.Sprintf(`CONTEXT:
 This function must return the Terraform configuration main.tf and variables.tf that will be used to deploy the application with Qovery.
 
 OUTPUT FORMAT REQUIREMENTS:
@@ -260,50 +276,82 @@ TERRAFORM GENERATION INSTRUCTIONS:
 - The cluster and environment resources are not required in the configuration. Export the cluster and environment ids as variables.
 - Include comment into the Terraform files to explain the configuration if needed - users are technical but can be not familiar with Terraform.
 - Try to optimize the Terraform configuration as much as possible.
+- Don't include Terraform resources like qovery_deployment, qovery_project, qovery_environment, and qovery_cluster - use the variable references to them instead.
 - Refer to the Qovery Terraform Provider Documentation below to see all the options of the provider and how to use it:
 %s
 
 USE THE FOLLOWING TERRAFORM EXAMPLES AS REFERENCE TO GENERATE THE CONFIGURATION:
 %s`, string(qoveryConfigValueJSON), string(qoveryTerraformDocMarkdownJSON), string(examplesJSON))
 
-		response, err := claudeClient.Messages(prompt)
-		if err != nil {
-			generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
-				AppName: appName,
-				Prompt:  prompt,
-			})
+			response, err := claudeClient.Messages(prompt)
+			if err != nil {
+				resultChan <- result{
+					terraform: GeneratedTerraform{
+						AppName: appName,
+						Prompt:  prompt,
+					},
+					err: fmt.Errorf("error generating Terraform configs for %s: %w", appName, err),
+				}
+				return
+			}
 
-			return generatedTerraformFiles, fmt.Errorf("error generating Terraform configs: %w", err)
+			mainTf, variablesTf, err := parseTerraformResponse(response)
+			if err != nil {
+				resultChan <- result{
+					terraform: GeneratedTerraform{
+						AppName: appName,
+						Prompt:  prompt,
+					},
+					err: fmt.Errorf("error parsing Terraform response for %s: %w", appName, err),
+				}
+				return
+			}
+
+			// Validate the Terraform configuration
+			finalMainTf, err := validateTerraform(mainTf, variablesTf, claudeClient)
+			if err != nil {
+				resultChan <- result{
+					terraform: GeneratedTerraform{
+						AppName: appName,
+						Prompt:  prompt,
+					},
+					err: fmt.Errorf("error validating Terraform configuration for %s: %w", appName, err),
+				}
+				return
+			}
+
+			resultChan <- result{
+				terraform: GeneratedTerraform{
+					AppName:     appName,
+					MainTf:      finalMainTf,
+					VariablesTf: variablesTf,
+					Prompt:      prompt,
+				},
+				err: nil,
+			}
+		}(appName, qoveryConfigValue)
+	}
+
+	// Close results channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results and check for errors
+	var generatedTerraformFiles []GeneratedTerraform
+	var errors []error
+
+	for result := range resultChan {
+		if result.err != nil {
+			errors = append(errors, result.err)
 		}
+		generatedTerraformFiles = append(generatedTerraformFiles, result.terraform)
+	}
 
-		mainTf, variablesTf, err := parseTerraformResponse(response)
-
-		if err != nil {
-			generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
-				AppName: appName,
-				Prompt:  prompt,
-			})
-
-			return generatedTerraformFiles, err
-		}
-
-		// Validate the Terraform configuration
-		finalMainTf, err := validateTerraform(mainTf, variablesTf, claudeClient)
-		if err != nil {
-			generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
-				AppName: appName,
-				Prompt:  prompt,
-			})
-
-			return generatedTerraformFiles, fmt.Errorf("error validating Terraform configuration: %w", err)
-		}
-
-		generatedTerraformFiles = append(generatedTerraformFiles, GeneratedTerraform{
-			AppName:     appName,
-			MainTf:      finalMainTf,
-			VariablesTf: variablesTf,
-			Prompt:      prompt,
-		})
+	// If there were any errors, return the first one
+	if len(errors) > 0 {
+		return generatedTerraformFiles, fmt.Errorf("errors occurred during parallel processing: %v", errors[0])
 	}
 
 	return generatedTerraformFiles, nil
