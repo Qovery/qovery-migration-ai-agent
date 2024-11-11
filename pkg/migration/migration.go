@@ -157,13 +157,6 @@ func GenerateMigrationAssets(configs []sources.AppConfig, awsKey, awsSecret, qov
 		return nil, fmt.Errorf("error generating Terraform configs: %w", err)
 	}
 
-	// Check Terraform files
-	for _, generatedTerraformFile := range generatedTerraformFiles {
-		if generatedTerraformFile.MainTf == "" {
-			return nil, fmt.Errorf("error generating Terraform configs for %s: empty main.tf", generatedTerraformFile.AppName)
-		}
-	}
-
 	progressChan <- ProgressUpdate{Stage: "Estimating costs", Progress: 0.9}
 
 	assets := &Assets{
@@ -870,13 +863,23 @@ func WriteAssets(outputDir string, assets *Assets, writePrompts bool) error {
 			return fmt.Errorf("error creating app directory: %w", err)
 		}
 
+		mainTf := generatedTf.MainTf
+		if generatedTf.MainTf == "" {
+			mainTf = "# An error occurred while generating the main.tf file. Please refer to the prompt for more information."
+		}
+
 		// Write main.tf
-		if err := writeToFile(filepath.Join(appDir, "main.tf"), generatedTf.MainTf); err != nil {
+		if err := writeToFile(filepath.Join(appDir, "main.tf"), mainTf); err != nil {
 			return fmt.Errorf("error writing main.tf: %w", err)
 		}
 
+		variablesTf := generatedTf.VariablesTf
+		if generatedTf.VariablesTf == "" {
+			variablesTf = "# An error occurred while generating the variables.tf file. Please refer to the prompt for more information."
+		}
+
 		// Write variables.tf
-		if err := writeToFile(filepath.Join(appDir, "variables.tf"), generatedTf.VariablesTf); err != nil {
+		if err := writeToFile(filepath.Join(appDir, "variables.tf"), variablesTf); err != nil {
 			return fmt.Errorf("error writing variables.tf: %w", err)
 		}
 
