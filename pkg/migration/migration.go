@@ -439,15 +439,7 @@ variable "application_name" {
 		generatedTerraformFiles = append(generatedTerraformFiles, result.terraform)
 	}
 
-	// If there were any errors, return the first one
-	if len(errors) > 0 {
-		errorsStr := make([]string, len(errors))
-		for i, err := range errors {
-			errorsStr[i] = err.Error()
-		}
-
-		return generatedTerraformFiles, fmt.Errorf("%d errors occurred during parallel processing: %v", len(errors), strings.Join(errorsStr, ", "))
-	}
+	// we even return the errors to the user - they can be useful for debugging
 
 	return generatedTerraformFiles, nil
 }
@@ -611,38 +603,6 @@ func loadMarkdownFiles(owner, repo, branch, token string) (map[string]string, er
 	}
 
 	return result, nil
-}
-
-// parseTerraformResponse parses the Bedrock response for Terraform configurations
-func parseTerraformResponse(response string) (string, string, error) {
-	response = strings.TrimSpace(response)
-
-	// Find the content between the first '(' and last ')'
-	startIdx := strings.Index(response, "(")
-	endIdx := strings.LastIndex(response, ")")
-
-	if startIdx == -1 || endIdx == -1 || startIdx >= endIdx {
-		return "", "", fmt.Errorf("could not find matching parentheses in response")
-	}
-
-	// Extract content between parentheses
-	content := response[startIdx+1 : endIdx]
-
-	// Split the content by the delimiter
-	parts := strings.SplitN(content, "|||", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid response format: missing delimiter '|||'")
-	}
-
-	// Clean up each part
-	mainTf := strings.TrimSpace(parts[0])
-	variablesTf := strings.TrimSpace(parts[1])
-
-	// Remove any quotes that might be present
-	mainTf = strings.Trim(mainTf, "\"")
-	variablesTf = strings.Trim(variablesTf, "\"")
-
-	return mainTf, variablesTf, nil
 }
 
 // ValidateTerraform takes an original Terraform manifest, validates it, and returns the final valid manifest or an error
