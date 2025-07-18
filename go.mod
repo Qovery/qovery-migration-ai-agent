@@ -1,6 +1,6 @@
 module github.com/Qovery/qovery-migration-ai-agent
 
-go 1.22.5
+go 1.23.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.32.4
@@ -10,7 +10,7 @@ require (
 	github.com/aws/smithy-go v1.22.0
 	github.com/google/go-github/v39 v39.2.0
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/oauth2 v0.24.0
+	golang.org/x/oauth2 v0.27.0
 )
 
 require (
