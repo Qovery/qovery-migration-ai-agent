@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.32.4 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.6 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.28.3 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.44 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.19 // indirect
@@ -27,7 +27,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.24.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.28.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.32.4 // indirect
-	github.com/aws/smithy-go v1.22.0 // indirect
+	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
