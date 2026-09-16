@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18 AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy package.json and package-lock.json
@@ -16,7 +16,7 @@ ENV NEXT_PUBLIC_API_HOST_URL=$NEXT_PUBLIC_API_HOST_URL
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:22-alpine
 WORKDIR /app
 
 # Copy built assets from builder stage
