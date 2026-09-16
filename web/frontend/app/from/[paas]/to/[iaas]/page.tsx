@@ -6,12 +6,12 @@ import {migrationData, PaaS, IaaS} from '@/app/data/migrationData';
 import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 
-export default function EnhancedMigrationPage({
+export default async function EnhancedMigrationPage({
                                                   params,
                                               }: {
-    params: { paas: PaaS; iaas: IaaS<PaaS> }
+    params: Promise<{ paas: PaaS; iaas: IaaS<PaaS> }>
 }) {
-    const {paas, iaas} = params;
+    const {paas, iaas} = await params;
     const migrationInfo = migrationData[paas]?.[iaas];
 
     return (
