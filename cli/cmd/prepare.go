@@ -35,7 +35,7 @@ func init() {
 func runPrepare(cmd *cobra.Command, args []string) {
 	// Validate source
 	if source != "heroku" && source != "clevercloud" {
-		fmt.Println("Error: Currently only 'heroku' and 'clevercloud' is supported as a source")
+		fmt.Println("Error: Currently only 'heroku' and 'clevercloud' are supported as a source")
 		os.Exit(1)
 	}
 
