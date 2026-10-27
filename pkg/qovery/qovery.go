@@ -2,7 +2,7 @@ package qovery
 
 // QoveryProvider represents a client for interacting with Qovery
 type QoveryProvider struct {
-	// for later use to fetch the configuration from current qovery account
+	// for later use to fetch the configuration from the current qovery account
 	APIKey string
 }
 
